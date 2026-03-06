@@ -1,12 +1,12 @@
 # MyDict Spring Boot Starter
 
-🚀 **全新升级版本** - 支持JDK21+ 和 Spring Boot 3.x，真正的零配置使用！
+🚀 **当前版本** - 支持 JDK 21+ 和 Spring Boot 3.x，以低配置方式接入编译期字典字段生成。
 
 自定义数据字典，编译期间自动生成字典字段，就像Lombok一样简单易用。
 
 ## ✨ 功能特性
 
-- 🎯 **零配置** - 无需任何IDEA设置或复杂配置
+- 🎯 **低配置接入** - 无需 IDEA 插件或额外 VM 参数，Maven 仅需一次性编译参数
 - ⚡ **编译时处理** - 编译期自动生成字典描述字段
 - 🔧 **Spring Boot 3** - 全面支持最新版本
 - 🌟 **JDK21+** - 拥抱现代Java生态
@@ -14,17 +14,38 @@
 - 🎨 **自定义注解** - 支持在生成字段上添加任意注解
 - 💾 **Caffeine缓存** - 自动缓存字典查询结果，可配置TTL和容量
 - 🔤 **智能命名** - 自动识别蛇形/驼峰命名，支持camelCase开关
+- 🧩 **多模块架构** - processor、core、autoconfigure、starter 职责分离
+- 🛡️ **边界场景已覆盖** - 无 getter、`final` 字段、手写 desc 访问器等场景可用
+
+## 🧱 项目结构
+
+从当前版本开始，工程已拆分为多模块，职责边界更清晰：
+
+- `mydict-core`：注解定义、缓存配置、运行时帮助类
+- `mydict-processor`：编译期注解处理器，负责生成 `xxxDesc` 字段和方法
+- `mydict-spring-boot-autoconfigure`：Spring Boot 自动配置
+- `mydict-spring-boot-starter`：对外提供的 starter 依赖坐标
+
+### 本地构建
+
+```bash
+mvn clean test
+mvn -pl mydict-spring-boot-starter -am package
+```
+
+> **说明**：
+> 使用方依赖坐标不变，仍然是 `io.github.canjiemo:mydict-spring-boot-starter`。
 
 ## 📋 版本兼容性
 
 | 版本 | JDK要求 | Spring Boot | 配置要求 |
 |------|---------|-------------|----------|
-| 1.0-jdk21 | **JDK21-24+** | 3.0+ | Maven 编译器配置(一次性) |
+| 1.0.2-jdk21 | **JDK21-24+** | 3.0+ | Maven 编译器配置(一次性) |
 | 1.2 | JDK8+ | 2.x | 需要IDEA配置 |
 
 > **⚠️ JDK 24 用户注意**:
-> - 如果遇到注解处理器不生成字段的问题,请确保使用 **JDK 24 编译的最新版本**
-> - 本项目已支持 JDK 21-24+,但需要用最高 JDK 版本编译以确保向下兼容
+> - 如果你计划发布供 JDK 24 环境使用的制品，建议用更高版本 JDK 完整构建并验证
+> - 消费方仍需在自己的 `maven-compiler-plugin` 中配置本文给出的编译参数
 
 ## 🎪 代码示例
 
@@ -39,6 +60,8 @@ public class TestVO {
     private String status = "ACTIVE";
 }
 ```
+
+> 源字段不要求手写 getter；处理器会优先调用 getter，不存在时回退为直接读字段。
 
 ### 编译后自动生成：
 ```java
@@ -85,10 +108,15 @@ public class TestVO {
     <dependency>
         <groupId>io.github.canjiemo</groupId>
         <artifactId>mydict-spring-boot-starter</artifactId>
-        <version>1.0-jdk21</version>
+        <version>1.0.2-jdk21</version>
     </dependency>
 </dependencies>
 ```
+
+`mydict-spring-boot-starter` 会同时引入：
+
+- 编译期注解处理器 `mydict-processor`
+- 运行时自动配置 `mydict-spring-boot-autoconfigure`
 
 ### 2. ⚠️ 配置Maven编译器（必需！）
 
@@ -223,6 +251,12 @@ mvn clean compile
 - `private String typeDesc;` 字段
 - 对应的getter/setter方法
 
+补充说明：
+
+- 原字段可以没有 getter
+- 原字段可以是 `final`
+- 如果你手写了 `getXxxDesc` / `setXxxDesc`，处理器会跳过重复生成
+
 ## 💾 缓存配置
 
 MyDict 内置 Caffeine 缓存以提升字典查询性能。默认启用，可通过配置调整：
@@ -324,16 +358,18 @@ private String goodsTypeDesc;
 
 ## 🆚 与旧版本对比
 
-| 特性 | 旧版本(1.2) | 新版本(1.0-jdk21) |
+| 特性 | 旧版本(1.2) | 新版本(1.0.2-jdk21) |
 |------|------------|-----------------|
-| IDEA配置 | ❌ 需要手动配置VM参数 | ✅ 无需IDEA配置 |
+| IDEA配置 | ❌ 需要手动配置VM参数 | ✅ 无需额外插件或共享 VM 参数 |
 | Maven配置 | 复杂 | 简单（一次性配置） |
 | JDK版本 | JDK8+ | JDK21+ |
 | Spring Boot | 2.x | 3.x |
 | 依赖管理 | 需要tools.jar | 现代化依赖 |
 | 模块系统 | 不支持 | 完全支持 |
+| 模块结构 | 单体实现 | `core + processor + autoconfigure + starter` |
 | 缓存支持 | ❌ 无 | ✅ Caffeine缓存 |
 | 智能命名 | ❌ 无 | ✅ 自动识别+开关 |
+| 回归测试 | 较少 | ✅ 已覆盖关键边界场景 |
 
 ## ❗ 重要说明
 
@@ -374,7 +410,7 @@ private String goodsTypeDesc;
 1. `Settings` → `Build Tools` → `Maven` → `Runner`
 2. 勾选：`Delegate IDE build/run actions to Maven`
 
-### 为什么不是真正的"零配置"？
+### 为什么是“低配置”而不是绝对“零配置”？
 
 由于本项目采用与Lombok类似的AST修改技术，需要访问javac编译器的内部API。JDK 21+引入了强模块化系统（JPMS），这些API默认不对外开放。
 
@@ -383,10 +419,10 @@ private String goodsTypeDesc;
 - 两者都通过修改AST在编译期生成代码
 - 这是目前最高效的实现方式（零运行时开销）
 
-**未来计划：**
-- 考虑提供符合JSR 269标准的实现（生成源文件）
-- 提供Maven插件自动配置
-- 探索更优雅的集成方案
+**当前状态：**
+- 已拆分为多模块，便于长期维护
+- 已补充核心回归测试，覆盖处理器、自动配置和缓存逻辑
+- 仍然基于 AST 修改方案，因此消费端编译参数要求不会消失
 
 ## 🛠️ 故障排除
 
@@ -407,8 +443,8 @@ private String goodsTypeDesc;
 - 但是 `xxxDesc` 字段和 getter/setter 方法没有生成
 
 **原因**：
-- MyDict 注解处理器 JAR 是用较低版本 JDK 编译的
-- JDK 24 的模块系统更严格,导致运行时兼容性问题
+- 注解处理器依赖 javac 内部 API
+- JDK 24 的模块访问限制更严格，发布构建与消费构建都需要匹配的编译参数和验证
 
 **解决方案**：
 
@@ -418,14 +454,15 @@ private String goodsTypeDesc;
    mvn clean compile
    ```
 
-2. **方案 2**: 使用 JDK 24 编译的最新版本(推荐)
+2. **方案 2**: 使用较高版本 JDK 重新构建并验证
    - 确保使用最新发布的 mydict 版本
    - 或者自行用 JDK 24 编译本项目:
      ```bash
      git clone https://github.com/canjiemo/mydict-spring-boot-starter
      cd mydict-spring-boot-starter
      # 确保使用 JDK 24
-     mvn clean install -DskipTests
+     mvn clean test
+     mvn -pl mydict-spring-boot-starter -am package
      ```
 
 3. **验证是否生成**：
@@ -484,7 +521,7 @@ private String goodsTypeDesc;
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
-        <version>3.2.0</version>
+        <version>3.4.0</version>
     </parent>
 
     <groupId>com.example</groupId>
@@ -505,7 +542,7 @@ private String goodsTypeDesc;
         <dependency>
             <groupId>io.github.canjiemo</groupId>
             <artifactId>mydict-spring-boot-starter</artifactId>
-            <version>1.0-jdk21</version>
+            <version>1.0.2-jdk21</version>
         </dependency>
 
         <!-- 可选：MyBatis-Plus支持 -->
@@ -557,8 +594,8 @@ private String goodsTypeDesc;
 
 ### 编译要求
 
-- **推荐**: 使用 **JDK 24** 编译,以获得最佳跨版本兼容性
 - **最低**: JDK 21+
+- **建议**: 发布制品前使用更高版本 JDK 做一次完整构建验证
 
 ### 编译步骤
 
@@ -570,26 +607,28 @@ cd mydict-spring-boot-starter
 # 2. 确保使用 JDK 24 (推荐) 或 JDK 21+
 java -version
 
-# 3. 编译并安装到本地 Maven 仓库
-mvn clean install -DskipTests
+# 3. 运行多模块测试
+mvn clean test
 
-# 4. 在你的项目中使用
+# 4. 打包 starter 及其依赖模块
+mvn -pl mydict-spring-boot-starter -am package
+
+# 5. 在你的项目中使用
 # 确保 pom.xml 中的版本号与编译的版本一致
 ```
 
-### 为什么推荐用 JDK 24 编译?
+### 为什么建议用较高版本 JDK 做发布构建?
 
-1. **向下兼容**: JDK 24 编译的 JAR 可以在 JDK 21+ 上运行
-2. **模块系统**: JDK 24 的模块系统最严格,确保兼容性
-3. **未来保障**: 为未来的 JDK 版本做好准备
+1. **更早暴露问题**: 更严格的模块边界更容易提前发现兼容性问题
+2. **发布更稳妥**: 对面向多个 JDK 版本的制品更有帮助
+3. **验证更完整**: 能和消费方的高版本 JDK 环境更早对齐
 
-> **⚠️ 注意**: 如果用 JDK 21 编译,在 JDK 24 环境可能遇到注解处理器不工作的问题。
+> **⚠️ 注意**: 无论使用哪个 JDK 发布，消费方自己的 Maven 编译参数仍然必须配置正确。
 
 ## 📝 更新日志
 
-### 1.0-jdk21 版本 (2025)
+### 1.0.2-jdk21 当前版本
 - ✅ 支持 JDK 21-24+ 和 Spring Boot 3.x
-- ✅ 完整兼容 JDK 24 的严格模块系统
 - ✅ 移除对 tools.jar 的依赖
 - ✅ 现代化模块系统支持
 - ✅ 优化 MyBatis-Plus 集成
@@ -598,7 +637,8 @@ mvn clean install -DskipTests
 - ✅ 支持 camelCase 命名开关
 - ✅ 智能命名识别（蛇形/驼峰）
 - ✅ **原生支持 IDEA 增量编译**（自动解包 Proxy）
-- ✅ **JDK 24 全面兼容**（需用 JDK 24 编译）
+- ✅ **已拆分为多模块架构**
+- ✅ **已补充处理器、自动配置、缓存回归测试**
 
 ### 1.2 版本 (历史版本)
 - 支持JDK8和Spring Boot 2.x
@@ -606,4 +646,4 @@ mvn clean install -DskipTests
 
 ---
 
-💡 **享受零配置的开发体验吧！** 就像使用Lombok一样简单优雅。
+💡 **享受低配置、编译期生成字典字段的开发体验。**

@@ -5,18 +5,18 @@
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>io.github.canjiemo</groupId>
-    <artifactId>mydict-spring-boot-starter</artifactId>
-    <packaging>jar</packaging>
-    <version>1.0.1-jdk21</version>
+    <artifactId>mydict-parent</artifactId>
+    <packaging>pom</packaging>
+    <version>1.0.2-jdk21</version>
     <name>${project.artifactId}-${project.version}</name>
-    <description>${project.artifactId}-${project.version}</description>
+    <description>Parent build for MyDict Spring Boot Starter</description>
 
-    <url>https://github.com/canjiemo/${project.artifactId}</url>
+    <url>https://github.com/canjiemo/mydict-spring-boot-starter</url>
 
     <scm>
-        <url>https://github.com/canjiemo/${project.artifactId}</url>
-        <connection>scm:git:https://github.com/canjiemo/${project.artifactId}.git</connection>
-        <developerConnection>scm:git:https://github.com/canjiemo/${project.artifactId}.git</developerConnection>
+        <url>https://github.com/canjiemo/mydict-spring-boot-starter</url>
+        <connection>scm:git:https://github.com/canjiemo/mydict-spring-boot-starter.git</connection>
+        <developerConnection>scm:git:https://github.com/canjiemo/mydict-spring-boot-starter.git</developerConnection>
         <tag>${project.version}</tag>
     </scm>
 
@@ -36,14 +36,18 @@
             <url>http://www.apache.org/licenses/LICENSE-2.0.txt</url>
         </license>
     </licenses>
+    <modules>
+        <module>mydict-core</module>
+        <module>mydict-processor</module>
+        <module>mydict-spring-boot-autoconfigure</module>
+        <module>mydict-spring-boot-starter</module>
+    </modules>
     <properties>
         <!-- Java 版本配置 -->
         <java.version>21</java.version>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
 
-        <!-- Spring 版本 -->
-        <spring.version>6.1.14</spring.version>
         <spring-boot.version>3.4.0</spring-boot.version>
 
         <!-- Maven 插件版本 -->
@@ -55,45 +59,45 @@
         <maven-gpg-plugin.version>3.2.7</maven-gpg-plugin.version>
         <nexus-staging-maven-plugin.version>1.7.0</nexus-staging-maven-plugin.version>
         <central-plugin.version>0.4.0</central-plugin.version>
+        <maven-surefire-plugin.version>3.2.5</maven-surefire-plugin.version>
 
         <!-- 缓存版本 -->
         <caffeine.version>3.2.3</caffeine.version>
     </properties>
 
-
-    <dependencies>
-        <!-- Spring Context (轻量级依赖，用于依赖注入) -->
-        <dependency>
-            <groupId>org.springframework</groupId>
-            <artifactId>spring-context</artifactId>
-            <version>${spring.version}</version>
-            <optional>true</optional>
-        </dependency>
-
-        <!-- Spring Boot AutoConfiguration (用于 @Configuration 支持) -->
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-autoconfigure</artifactId>
-            <version>${spring-boot.version}</version>
-            <optional>true</optional>
-        </dependency>
-
-        <!-- Caffeine 缓存 (用于字典查询缓存) -->
-        <dependency>
-            <groupId>com.github.ben-manes.caffeine</groupId>
-            <artifactId>caffeine</artifactId>
-            <version>${caffeine.version}</version>
-        </dependency>
-    </dependencies>
-
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-dependencies</artifactId>
+                <version>${spring-boot.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <dependency>
+                <groupId>${project.groupId}</groupId>
+                <artifactId>mydict-core</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>${project.groupId}</groupId>
+                <artifactId>mydict-processor</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>${project.groupId}</groupId>
+                <artifactId>mydict-spring-boot-autoconfigure</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>${project.groupId}</groupId>
+                <artifactId>mydict-spring-boot-starter</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
 
     <build>
-        <finalName>${project.artifactId}-${project.version}</finalName>
-        <resources>
-            <resource>
-                <directory>src/main/resources</directory>
-            </resource>
-        </resources>
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
@@ -165,6 +169,11 @@
                         </goals>
                     </execution>
                 </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>${maven-surefire-plugin.version}</version>
             </plugin>
 
             <!-- GPG 签名 -->
