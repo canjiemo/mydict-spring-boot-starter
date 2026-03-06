@@ -7,7 +7,7 @@
     <groupId>io.github.canjiemo</groupId>
     <artifactId>mydict-spring-boot-starter</artifactId>
     <packaging>jar</packaging>
-    <version>1.0-jdk21</version>
+    <version>1.0.1-jdk21</version>
     <name>${project.artifactId}-${project.version}</name>
     <description>${project.artifactId}-${project.version}</description>
 
@@ -23,7 +23,7 @@
     <developers>
         <developer>
             <id>io.github.canjiemo</id>
-            <name>mocanjie</name>
+            <name>canjiemo</name>
             <email>canjiemo@gmail.com</email>
             <url>https://github.com/canjiemo</url>
             <timezone>+8</timezone>

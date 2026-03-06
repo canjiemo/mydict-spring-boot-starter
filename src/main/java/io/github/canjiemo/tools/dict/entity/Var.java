@@ -1,4 +1,4 @@
-package io.github.mocanjie.tools.dict.entity;
+package io.github.canjiemo.tools.dict.entity;
 
 public @interface Var {
     VarType varType();

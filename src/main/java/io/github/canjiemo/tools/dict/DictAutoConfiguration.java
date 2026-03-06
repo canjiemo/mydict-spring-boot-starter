@@ -1,4 +1,4 @@
-package io.github.mocanjie.tools.dict;
+package io.github.canjiemo.tools.dict;
 
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
@@ -8,7 +8,7 @@ import org.springframework.context.annotation.Configuration;
  * MyDict 自动配置类
  * 自动装配字典帮助类和缓存配置
  *
- * @author mocanjie
+ * @author canjiemo
  */
 @Configuration
 public class DictAutoConfiguration {

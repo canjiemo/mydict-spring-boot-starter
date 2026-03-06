@@ -1,4 +1,4 @@
-package io.github.mocanjie.tools.dict;
+package io.github.canjiemo.tools.dict;
 
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
@@ -9,7 +9,7 @@ import java.lang.annotation.Target;
  * 字典注解
  * 用于自动生成字典描述字段
  *
- * @author mocanjie
+ * @author canjiemo
  */
 @Target({ElementType.FIELD})
 @Retention(RetentionPolicy.SOURCE)

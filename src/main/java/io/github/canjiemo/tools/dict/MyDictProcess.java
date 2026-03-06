@@ -1,4 +1,4 @@
-package io.github.mocanjie.tools.dict;
+package io.github.canjiemo.tools.dict;
 
 import com.sun.tools.javac.api.JavacTrees;
 import com.sun.tools.javac.code.Flags;
@@ -8,8 +8,8 @@ import com.sun.tools.javac.processing.JavacProcessingEnvironment;
 import com.sun.tools.javac.tree.JCTree;
 import com.sun.tools.javac.tree.TreeMaker;
 import com.sun.tools.javac.util.*;
-import io.github.mocanjie.tools.dict.entity.Var;
-import io.github.mocanjie.tools.dict.entity.VarType;
+import io.github.canjiemo.tools.dict.entity.Var;
+import io.github.canjiemo.tools.dict.entity.VarType;
 
 import javax.annotation.processing.AbstractProcessor;
 import javax.annotation.processing.ProcessingEnvironment;
@@ -20,7 +20,7 @@ import javax.lang.model.element.TypeElement;
 import javax.lang.model.element.VariableElement;
 import java.util.Set;
 
-@SupportedAnnotationTypes({"io.github.mocanjie.tools.dict.MyDict"})
+@SupportedAnnotationTypes({"io.github.canjiemo.tools.dict.MyDict"})
 public class MyDictProcess extends AbstractProcessor {
 
     private JavacTrees trees;
@@ -151,7 +151,7 @@ public class MyDictProcess extends AbstractProcessor {
         JCTree.JCVariableDecl descStr = treeMaker.VarDef(
                 treeMaker.Modifiers(0), names.fromString("descStr"), memberAccess("java.lang.String"),treeMaker.Apply(
                         List.<JCTree.JCExpression>nil(),
-                        treeMaker.Select(memberAccess("io.github.mocanjie.tools.dict.MyDictHelper"),
+                        treeMaker.Select(memberAccess("io.github.canjiemo.tools.dict.MyDictHelper"),
                                 elementUtils.getName("getDesc")),
                         List.<JCTree.JCExpression>of(
                                 treeMaker.Literal(annotation.name()),

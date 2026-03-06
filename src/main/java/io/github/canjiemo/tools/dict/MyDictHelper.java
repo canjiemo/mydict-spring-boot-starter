@@ -1,4 +1,4 @@
-package io.github.mocanjie.tools.dict;
+package io.github.canjiemo.tools.dict;
 
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
@@ -10,7 +10,7 @@ import java.util.concurrent.TimeUnit;
  * MyDict 字典帮助类
  * 支持 Caffeine 缓存，提升字典查询性能
  *
- * @author mocanjie
+ * @author canjiemo
  */
 public class MyDictHelper {
 

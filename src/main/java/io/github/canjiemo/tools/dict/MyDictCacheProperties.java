@@ -1,11 +1,11 @@
-package io.github.mocanjie.tools.dict;
+package io.github.canjiemo.tools.dict;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
  * MyDict 缓存配置属性
  *
- * @author mocanjie
+ * @author canjiemo
  */
 @ConfigurationProperties(prefix = "mydict.cache")
 public class MyDictCacheProperties {

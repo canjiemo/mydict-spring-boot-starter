@@ -1,6 +1,6 @@
-package io.github.mocanjie.tools.dict;
+package io.github.canjiemo.tools.dict;
 
-import io.github.mocanjie.tools.dict.entity.Var;
+import io.github.canjiemo.tools.dict.entity.Var;
 
 public @interface FieldAnnotation {
     String fullAnnotationName();

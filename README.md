@@ -83,7 +83,7 @@ public class TestVO {
 ```xml
 <dependencies>
     <dependency>
-        <groupId>io.github.mocanjie</groupId>
+        <groupId>io.github.canjiemo</groupId>
         <artifactId>mydict-spring-boot-starter</artifactId>
         <version>1.0-jdk21</version>
     </dependency>
@@ -168,7 +168,7 @@ public class TestVO {
 
 **如果缺少此配置，会出现以下编译错误：**
 ```
-java.lang.IllegalAccessError: class io.github.mocanjie.tools.dict.MyDictProcess
+java.lang.IllegalAccessError: class io.github.canjiemo.tools.dict.MyDictProcess
 cannot access class com.sun.tools.javac.api.JavacTrees because module jdk.compiler
 does not export com.sun.tools.javac.api to unnamed module
 ```
@@ -422,7 +422,7 @@ private String goodsTypeDesc;
    - 确保使用最新发布的 mydict 版本
    - 或者自行用 JDK 24 编译本项目:
      ```bash
-     git clone https://github.com/mocanjie/mydict-spring-boot-starter
+     git clone https://github.com/canjiemo/mydict-spring-boot-starter
      cd mydict-spring-boot-starter
      # 确保使用 JDK 24
      mvn clean install -DskipTests
@@ -503,7 +503,7 @@ private String goodsTypeDesc;
 
         <!-- MyDict Starter -->
         <dependency>
-            <groupId>io.github.mocanjie</groupId>
+            <groupId>io.github.canjiemo</groupId>
             <artifactId>mydict-spring-boot-starter</artifactId>
             <version>1.0-jdk21</version>
         </dependency>
@@ -564,7 +564,7 @@ private String goodsTypeDesc;
 
 ```bash
 # 1. 克隆项目
-git clone https://github.com/mocanjie/mydict-spring-boot-starter.git
+git clone https://github.com/canjiemo/mydict-spring-boot-starter.git
 cd mydict-spring-boot-starter
 
 # 2. 确保使用 JDK 24 (推荐) 或 JDK 21+
@@ -607,4 +607,3 @@ mvn clean install -DskipTests
 ---
 
 💡 **享受零配置的开发体验吧！** 就像使用Lombok一样简单优雅。
-

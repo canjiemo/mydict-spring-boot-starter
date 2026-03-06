@@ -1,2 +1,2 @@
 org.springframework.boot.autoconfigure.EnableAutoConfiguration=\
-io.github.mocanjie.tools.dict.DictAutoConfiguration
+io.github.canjiemo.tools.dict.DictAutoConfiguration
