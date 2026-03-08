@@ -2,6 +2,7 @@ package io.github.canjiemo.tools.dict;
 
 import com.sun.tools.javac.api.JavacTrees;
 import com.sun.tools.javac.code.Flags;
+import com.sun.tools.javac.code.Type;
 import com.sun.tools.javac.code.TypeTag;
 import com.sun.tools.javac.model.JavacElements;
 import com.sun.tools.javac.processing.JavacProcessingEnvironment;
@@ -13,14 +14,29 @@ import io.github.canjiemo.tools.dict.entity.VarType;
 
 import javax.annotation.processing.*;
 import javax.lang.model.SourceVersion;
+import javax.lang.model.element.AnnotationValue;
 import javax.lang.model.element.Element;
+import javax.lang.model.element.ElementKind;
+import javax.lang.model.element.ExecutableElement;
 import javax.lang.model.element.TypeElement;
 import javax.lang.model.element.VariableElement;
+import javax.lang.model.type.ArrayType;
+import javax.lang.model.type.DeclaredType;
+import javax.lang.model.type.NoType;
+import javax.lang.model.type.TypeKind;
+import javax.lang.model.type.TypeMirror;
 import javax.tools.Diagnostic;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 
 @SupportedAnnotationTypes({"io.github.canjiemo.tools.dict.MyDict"})
 public class MyDictProcess extends AbstractProcessor {
+
+    private record ResolvedDescAnnotation(String fullAnnotationName, List<JCTree.JCExpression> arguments) {
+    }
 
     private JavacTrees trees;
     private TreeMaker treeMaker;
@@ -48,11 +64,15 @@ public class MyDictProcess extends AbstractProcessor {
                 if (dictName == null) {
                     continue;
                 }
+                java.util.List<ResolvedDescAnnotation> descFieldAnnotations = resolveDescFieldAnnotations(variableElement, annotation);
+                if (descFieldAnnotations == null) {
+                    continue;
+                }
                 if (isVariableExist(jcClassDecl, jcVariableDecl, annotation)) {
                     continue;
                 }
 
-                JCTree.JCVariableDecl dictVariableDecl = makeDictDescFieldDecl(jcVariableDecl, annotation);
+                JCTree.JCVariableDecl dictVariableDecl = makeDictDescFieldDecl(jcVariableDecl, annotation, descFieldAnnotations);
                 jcClassDecl.defs = jcClassDecl.defs.append(dictVariableDecl);
 
                 Name getterName = getNewMethodName(0, jcVariableDecl.getName(), annotation);
@@ -101,6 +121,132 @@ public class MyDictProcess extends AbstractProcessor {
         return dictName;
     }
 
+    private java.util.List<ResolvedDescAnnotation> resolveDescFieldAnnotations(VariableElement variableElement, MyDict annotation) {
+        FieldAnnotation[] descFieldAnnotations = annotation.descFieldAnnotations() == null
+                ? new FieldAnnotation[0]
+                : annotation.descFieldAnnotations();
+        FieldAnnotation[] legacyFieldAnnotations = annotation.fieldAnnotations() == null
+                ? new FieldAnnotation[0]
+                : annotation.fieldAnnotations();
+
+        if (descFieldAnnotations.length > 0 && legacyFieldAnnotations.length > 0) {
+            messager.printMessage(
+                    Diagnostic.Kind.ERROR,
+                    "@MyDict cannot use descFieldAnnotations and deprecated fieldAnnotations at the same time.",
+                    variableElement
+            );
+            return null;
+        }
+
+        FieldAnnotation[] effectiveAnnotations = descFieldAnnotations.length > 0
+                ? descFieldAnnotations
+                : legacyFieldAnnotations;
+
+        java.util.List<ResolvedDescAnnotation> resolvedAnnotations = new ArrayList<>();
+        for (FieldAnnotation descFieldAnnotation : effectiveAnnotations) {
+            ResolvedDescAnnotation resolvedAnnotation = resolveDescFieldAnnotation(variableElement, descFieldAnnotation);
+            if (resolvedAnnotation == null) {
+                return null;
+            }
+            resolvedAnnotations.add(resolvedAnnotation);
+        }
+        return resolvedAnnotations;
+    }
+
+    private ResolvedDescAnnotation resolveDescFieldAnnotation(VariableElement variableElement, FieldAnnotation annotation) {
+        String fullAnnotationName = annotation.fullAnnotationName() == null ? "" : annotation.fullAnnotationName().trim();
+        if (fullAnnotationName.isEmpty()) {
+            messager.printMessage(
+                    Diagnostic.Kind.ERROR,
+                    "descFieldAnnotations requires fullAnnotationName.",
+                    variableElement
+            );
+            return null;
+        }
+
+        TypeElement annotationType = elementUtils.getTypeElement(fullAnnotationName);
+        if (annotationType == null) {
+            messager.printMessage(
+                    Diagnostic.Kind.ERROR,
+                    "Cannot resolve desc field annotation type '" + fullAnnotationName + "'.",
+                    variableElement
+            );
+            return null;
+        }
+        if (annotationType.getKind() != ElementKind.ANNOTATION_TYPE) {
+            messager.printMessage(
+                    Diagnostic.Kind.ERROR,
+                    "'" + fullAnnotationName + "' is not an annotation type.",
+                    variableElement
+            );
+            return null;
+        }
+
+        Map<String, ExecutableElement> members = getAnnotationMembers(annotationType);
+        Set<String> assignedMembers = new HashSet<>();
+        ListBuffer<JCTree.JCExpression> arguments = new ListBuffer<>();
+        for (Var var : annotation.vars()) {
+            String varName = var.varName() == null ? "" : var.varName().trim();
+            if (varName.isEmpty()) {
+                messager.printMessage(
+                        Diagnostic.Kind.ERROR,
+                        "descFieldAnnotations on '" + fullAnnotationName + "' contains an empty varName.",
+                        variableElement
+                );
+                return null;
+            }
+            if (!assignedMembers.add(varName)) {
+                messager.printMessage(
+                        Diagnostic.Kind.ERROR,
+                        "Duplicate annotation member '" + varName + "' in descFieldAnnotations for '" + fullAnnotationName + "'.",
+                        variableElement
+                );
+                return null;
+            }
+
+            ExecutableElement member = members.get(varName);
+            if (member == null) {
+                messager.printMessage(
+                        Diagnostic.Kind.ERROR,
+                        "Annotation '" + fullAnnotationName + "' does not declare member '" + varName + "'.",
+                        variableElement
+                );
+                return null;
+            }
+
+            JCTree.JCExpression valueExpression = buildAnnotationMemberValue(variableElement, fullAnnotationName, member, var);
+            if (valueExpression == null) {
+                return null;
+            }
+            arguments.append(treeMaker.Assign(treeMaker.Ident(names.fromString(varName)), valueExpression));
+        }
+
+        for (ExecutableElement member : members.values()) {
+            AnnotationValue defaultValue = member.getDefaultValue();
+            String memberName = member.getSimpleName().toString();
+            if (defaultValue == null && !assignedMembers.contains(memberName)) {
+                messager.printMessage(
+                        Diagnostic.Kind.ERROR,
+                        "Annotation '" + fullAnnotationName + "' requires member '" + memberName + "'.",
+                        variableElement
+                );
+                return null;
+            }
+        }
+
+        return new ResolvedDescAnnotation(fullAnnotationName, arguments.toList());
+    }
+
+    private Map<String, ExecutableElement> getAnnotationMembers(TypeElement annotationType) {
+        Map<String, ExecutableElement> members = new HashMap<>();
+        for (Element enclosedElement : annotationType.getEnclosedElements()) {
+            if (enclosedElement.getKind() == ElementKind.METHOD) {
+                members.put(enclosedElement.getSimpleName().toString(), (ExecutableElement) enclosedElement);
+            }
+        }
+        return members;
+    }
+
     private boolean isVariableExist(JCTree.JCClassDecl jcClassDecl, JCTree.JCVariableDecl jcVariableDecl, MyDict annotation){
         Name dictVarName = getNewDictVarName(jcVariableDecl.getName(), annotation);
         return jcClassDecl.defs.stream().filter(x -> {
@@ -113,7 +259,7 @@ public class MyDictProcess extends AbstractProcessor {
         }).findAny().isPresent();
     }
 
-    private JCTree.JCVariableDecl makeDictDescFieldDecl(JCTree.JCVariableDecl jcVariableDecl,MyDict dict) {
+    private JCTree.JCVariableDecl makeDictDescFieldDecl(JCTree.JCVariableDecl jcVariableDecl,MyDict dict, java.util.List<ResolvedDescAnnotation> descFieldAnnotations) {
         treeMaker.pos = jcVariableDecl.pos;
         ListBuffer<JCTree.JCAnnotation> annotationsList = new ListBuffer<>();
         try {
@@ -127,34 +273,354 @@ public class MyDictProcess extends AbstractProcessor {
         }catch (Throwable e){
             // MyBatis-Plus不存在，跳过添加@TableField注解
         }
-        if(dict.fieldAnnotations()!=null && dict.fieldAnnotations().length>0){
-            FieldAnnotation[] annotations = dict.fieldAnnotations();
-            for (FieldAnnotation annotation : annotations) {
-                String fullAnnotationName = annotation.fullAnnotationName();
-                Var[] vars = annotation.vars();
-                ListBuffer<JCTree.JCExpression> varsList = new ListBuffer<>();
-                for (Var var : vars) {
-                    Object typeTagValue = getTypeTagValue(var.varType(), var.varValue());
-                    JCTree.JCExpression attr1 = treeMaker.Assign(treeMaker.Ident(names.fromString(var.varName())),
-                            treeMaker.Literal(typeTagValue));
-                    varsList.append(attr1);
-                }
-                JCTree.JCAnnotation jcAnnotation = treeMaker.Annotation(memberAccess(fullAnnotationName), varsList.toList());
-                annotationsList.append(jcAnnotation);
-            }
+        for (ResolvedDescAnnotation annotation : descFieldAnnotations) {
+            annotationsList.append(treeMaker.Annotation(memberAccess(annotation.fullAnnotationName()), annotation.arguments()));
         }
         long generatedFieldFlags = jcVariableDecl.getModifiers().flags & ~Flags.FINAL;
         return treeMaker.VarDef(treeMaker.Modifiers(generatedFieldFlags,annotationsList.toList()),getNewDictVarName(jcVariableDecl.getName(), dict),memberAccess("java.lang.String"), null);
     }
 
-    private Object getTypeTagValue(VarType varType,String varValue){
-        if(varType.name().equalsIgnoreCase(TypeTag.SHORT.toString())) return Integer.parseInt(varValue);
-        if(varType.name().equalsIgnoreCase(TypeTag.LONG.toString())) return Long.parseLong(varValue);
-        if(varType.name().equalsIgnoreCase(TypeTag.FLOAT.toString())) return Float.parseFloat(varValue);
-        if(varType.name().equalsIgnoreCase(TypeTag.INT.toString())) return Integer.parseInt(varValue);
-        if(varType.name().equalsIgnoreCase(TypeTag.DOUBLE.toString())) return Double.parseDouble(varValue);
-        if(varType.name().equalsIgnoreCase(TypeTag.BOOLEAN.toString())) return Boolean.parseBoolean(varValue);
-        return varValue;
+    private JCTree.JCExpression buildAnnotationMemberValue(VariableElement variableElement, String annotationName, ExecutableElement member, Var var) {
+        TypeMirror memberType = member.getReturnType();
+        boolean hasScalarValue = !Var.UNSET.equals(var.varValue());
+        boolean hasArrayValues = var.varValues() != null && var.varValues().length > 0;
+
+        if (memberType.getKind() == TypeKind.ARRAY) {
+            if (hasScalarValue && hasArrayValues) {
+                messager.printMessage(
+                        Diagnostic.Kind.ERROR,
+                        "Annotation '" + annotationName + "' member '" + member.getSimpleName() + "' cannot set both varValue and varValues.",
+                        variableElement
+                );
+                return null;
+            }
+
+            ArrayType arrayType = (ArrayType) memberType;
+            java.util.List<String> rawValues = new ArrayList<>();
+            if (hasArrayValues) {
+                for (String rawValue : var.varValues()) {
+                    rawValues.add(rawValue);
+                }
+            } else if (hasScalarValue) {
+                rawValues.add(var.varValue());
+            }
+
+            ListBuffer<JCTree.JCExpression> expressions = new ListBuffer<>();
+            for (String rawValue : rawValues) {
+                JCTree.JCExpression expression = buildScalarAnnotationValueExpression(
+                        variableElement,
+                        annotationName,
+                        member,
+                        arrayType.getComponentType(),
+                        var.varType(),
+                        rawValue
+                );
+                if (expression == null) {
+                    return null;
+                }
+                expressions.append(expression);
+            }
+            return treeMaker.NewArray(null, List.nil(), expressions.toList());
+        }
+
+        if (hasArrayValues) {
+            messager.printMessage(
+                    Diagnostic.Kind.ERROR,
+                    "Annotation '" + annotationName + "' member '" + member.getSimpleName() + "' is not an array; use varValue instead of varValues.",
+                    variableElement
+            );
+            return null;
+        }
+        if (!hasScalarValue) {
+            messager.printMessage(
+                    Diagnostic.Kind.ERROR,
+                    "Annotation '" + annotationName + "' member '" + member.getSimpleName() + "' requires varValue.",
+                    variableElement
+            );
+            return null;
+        }
+
+        return buildScalarAnnotationValueExpression(
+                variableElement,
+                annotationName,
+                member,
+                memberType,
+                var.varType(),
+                var.varValue()
+        );
+    }
+
+    private JCTree.JCExpression buildScalarAnnotationValueExpression(
+            VariableElement variableElement,
+            String annotationName,
+            ExecutableElement member,
+            TypeMirror expectedType,
+            VarType actualType,
+            String rawValue
+    ) {
+        try {
+            return switch (expectedType.getKind()) {
+                case BOOLEAN -> {
+                    ensureVarType(variableElement, annotationName, member, expectedType, actualType, VarType.BOOLEAN);
+                    yield treeMaker.Literal(parseBoolean(rawValue));
+                }
+                case BYTE -> {
+                    ensureVarType(variableElement, annotationName, member, expectedType, actualType, VarType.BYTE);
+                    yield treeMaker.Literal(TypeTag.BYTE, Integer.valueOf(Byte.parseByte(rawValue.trim())));
+                }
+                case SHORT -> {
+                    ensureVarType(variableElement, annotationName, member, expectedType, actualType, VarType.SHORT);
+                    yield treeMaker.Literal(TypeTag.SHORT, Integer.valueOf(Short.parseShort(rawValue.trim())));
+                }
+                case INT -> {
+                    ensureVarType(variableElement, annotationName, member, expectedType, actualType, VarType.INT);
+                    yield treeMaker.Literal(Integer.parseInt(rawValue.trim()));
+                }
+                case LONG -> {
+                    ensureVarType(variableElement, annotationName, member, expectedType, actualType, VarType.LONG);
+                    yield treeMaker.Literal(Long.parseLong(rawValue.trim()));
+                }
+                case FLOAT -> {
+                    ensureVarType(variableElement, annotationName, member, expectedType, actualType, VarType.FLOAT);
+                    yield treeMaker.Literal(Float.parseFloat(rawValue.trim()));
+                }
+                case DOUBLE -> {
+                    ensureVarType(variableElement, annotationName, member, expectedType, actualType, VarType.DOUBLE);
+                    yield treeMaker.Literal(Double.parseDouble(rawValue.trim()));
+                }
+                case CHAR -> {
+                    ensureVarType(variableElement, annotationName, member, expectedType, actualType, VarType.CHAR);
+                    yield treeMaker.Literal(TypeTag.CHAR, Integer.valueOf(parseChar(rawValue)));
+                }
+                case DECLARED -> buildDeclaredAnnotationValueExpression(
+                        variableElement,
+                        annotationName,
+                        member,
+                        (DeclaredType) expectedType,
+                        actualType,
+                        rawValue
+                );
+                default -> unsupportedAnnotationMemberType(variableElement, annotationName, member, expectedType);
+            };
+        } catch (IllegalArgumentException ex) {
+            messager.printMessage(
+                    Diagnostic.Kind.ERROR,
+                    "Invalid value for annotation '" + annotationName + "' member '" + member.getSimpleName() + "': " + ex.getMessage(),
+                    variableElement
+            );
+            return null;
+        }
+    }
+
+    private JCTree.JCExpression buildDeclaredAnnotationValueExpression(
+            VariableElement variableElement,
+            String annotationName,
+            ExecutableElement member,
+            DeclaredType expectedType,
+            VarType actualType,
+            String rawValue
+    ) {
+        Element element = expectedType.asElement();
+        if (!(element instanceof TypeElement typeElement)) {
+            return unsupportedAnnotationMemberType(variableElement, annotationName, member, expectedType);
+        }
+
+        String qualifiedName = typeElement.getQualifiedName().toString();
+        if (String.class.getCanonicalName().equals(qualifiedName)) {
+            ensureVarType(variableElement, annotationName, member, expectedType, actualType, VarType.STRING);
+            return treeMaker.Literal(rawValue);
+        }
+        if (Class.class.getCanonicalName().equals(qualifiedName)) {
+            ensureVarType(variableElement, annotationName, member, expectedType, actualType, VarType.CLASS);
+            TypeMirror classLiteralType = resolveClassLiteralType(variableElement, annotationName, member, rawValue);
+            if (classLiteralType == null) {
+                return null;
+            }
+            return treeMaker.ClassLiteral((Type) classLiteralType);
+        }
+        if (typeElement.getKind() == ElementKind.ENUM) {
+            ensureVarType(variableElement, annotationName, member, expectedType, actualType, VarType.ENUM);
+            String enumConstantName = resolveEnumConstantName(variableElement, annotationName, member, typeElement, rawValue);
+            if (enumConstantName == null) {
+                return null;
+            }
+            return memberAccess(typeElement.getQualifiedName() + "." + enumConstantName);
+        }
+
+        return unsupportedAnnotationMemberType(variableElement, annotationName, member, expectedType);
+    }
+
+    private JCTree.JCExpression unsupportedAnnotationMemberType(
+            VariableElement variableElement,
+            String annotationName,
+            ExecutableElement member,
+            TypeMirror expectedType
+    ) {
+        messager.printMessage(
+                Diagnostic.Kind.ERROR,
+                "Annotation '" + annotationName + "' member '" + member.getSimpleName() + "' has unsupported type '" + expectedType + "'.",
+                variableElement
+        );
+        return null;
+    }
+
+    private void ensureVarType(
+            VariableElement variableElement,
+            String annotationName,
+            ExecutableElement member,
+            TypeMirror expectedType,
+            VarType actualType,
+            VarType expectedVarType
+    ) {
+        if (actualType != expectedVarType) {
+            throw new IllegalArgumentException(
+                    "member '" + member.getSimpleName() + "' expects type '" + expectedType + "', but received VarType." + actualType
+            );
+        }
+    }
+
+    private boolean parseBoolean(String rawValue) {
+        String normalized = rawValue.trim();
+        if ("true".equalsIgnoreCase(normalized)) {
+            return true;
+        }
+        if ("false".equalsIgnoreCase(normalized)) {
+            return false;
+        }
+        throw new IllegalArgumentException("expected boolean literal true or false");
+    }
+
+    private char parseChar(String rawValue) {
+        if (rawValue.length() == 1) {
+            return rawValue.charAt(0);
+        }
+        return switch (rawValue) {
+            case "\\b" -> '\b';
+            case "\\t" -> '\t';
+            case "\\n" -> '\n';
+            case "\\f" -> '\f';
+            case "\\r" -> '\r';
+            case "\\\"" -> '\"';
+            case "\\'" -> '\'';
+            case "\\\\" -> '\\';
+            default -> {
+                if (rawValue.startsWith("\\u") && rawValue.length() == 6) {
+                    yield (char) Integer.parseInt(rawValue.substring(2), 16);
+                }
+                throw new IllegalArgumentException("expected a single character or supported escape sequence");
+            }
+        };
+    }
+
+    private TypeMirror resolveClassLiteralType(
+            VariableElement variableElement,
+            String annotationName,
+            ExecutableElement member,
+            String rawValue
+    ) {
+        String className = rawValue.trim();
+        if (className.isEmpty()) {
+            messager.printMessage(
+                    Diagnostic.Kind.ERROR,
+                    "Annotation '" + annotationName + "' member '" + member.getSimpleName() + "' requires a class name.",
+                    variableElement
+            );
+            return null;
+        }
+
+        TypeMirror primitiveType = switch (className) {
+            case "boolean" -> processingEnv.getTypeUtils().getPrimitiveType(TypeKind.BOOLEAN);
+            case "byte" -> processingEnv.getTypeUtils().getPrimitiveType(TypeKind.BYTE);
+            case "short" -> processingEnv.getTypeUtils().getPrimitiveType(TypeKind.SHORT);
+            case "int" -> processingEnv.getTypeUtils().getPrimitiveType(TypeKind.INT);
+            case "long" -> processingEnv.getTypeUtils().getPrimitiveType(TypeKind.LONG);
+            case "float" -> processingEnv.getTypeUtils().getPrimitiveType(TypeKind.FLOAT);
+            case "double" -> processingEnv.getTypeUtils().getPrimitiveType(TypeKind.DOUBLE);
+            case "char" -> processingEnv.getTypeUtils().getPrimitiveType(TypeKind.CHAR);
+            case "void" -> processingEnv.getTypeUtils().getNoType(TypeKind.VOID);
+            default -> null;
+        };
+        if (primitiveType != null) {
+            return primitiveType;
+        }
+
+        TypeElement typeElement = elementUtils.getTypeElement(className);
+        if (typeElement == null) {
+            messager.printMessage(
+                    Diagnostic.Kind.ERROR,
+                    "Cannot resolve class literal '" + className + "' for annotation '" + annotationName + "' member '" + member.getSimpleName() + "'.",
+                    variableElement
+            );
+            return null;
+        }
+        return typeElement.asType();
+    }
+
+    private String resolveEnumConstantName(
+            VariableElement variableElement,
+            String annotationName,
+            ExecutableElement member,
+            TypeElement enumType,
+            String rawValue
+    ) {
+        String normalized = rawValue.trim();
+        if (normalized.isEmpty()) {
+            messager.printMessage(
+                    Diagnostic.Kind.ERROR,
+                    "Annotation '" + annotationName + "' member '" + member.getSimpleName() + "' requires an enum constant name.",
+                    variableElement
+            );
+            return null;
+        }
+
+        String enumTypeName = enumType.getQualifiedName().toString();
+        String constantName = normalized;
+        if (normalized.contains(".")) {
+            String prefix = enumTypeName + ".";
+            if (!normalized.startsWith(prefix)) {
+                messager.printMessage(
+                        Diagnostic.Kind.ERROR,
+                        "Enum member '" + member.getSimpleName() + "' must use constant names from '" + enumTypeName + "'.",
+                        variableElement
+                );
+                return null;
+            }
+            constantName = normalized.substring(prefix.length());
+        }
+
+        for (Element enclosedElement : enumType.getEnclosedElements()) {
+            if (enclosedElement.getKind() == ElementKind.ENUM_CONSTANT
+                    && enclosedElement.getSimpleName().contentEquals(constantName)) {
+                return constantName;
+            }
+        }
+
+        messager.printMessage(
+                Diagnostic.Kind.ERROR,
+                "Enum '" + enumTypeName + "' does not declare constant '" + constantName + "'.",
+                variableElement
+        );
+        return null;
+    }
+
+    private JCTree.JCExpression typeTree(TypeMirror typeMirror) {
+        return switch (typeMirror.getKind()) {
+            case BOOLEAN -> treeMaker.TypeIdent(TypeTag.BOOLEAN);
+            case BYTE -> treeMaker.TypeIdent(TypeTag.BYTE);
+            case SHORT -> treeMaker.TypeIdent(TypeTag.SHORT);
+            case INT -> treeMaker.TypeIdent(TypeTag.INT);
+            case LONG -> treeMaker.TypeIdent(TypeTag.LONG);
+            case FLOAT -> treeMaker.TypeIdent(TypeTag.FLOAT);
+            case DOUBLE -> treeMaker.TypeIdent(TypeTag.DOUBLE);
+            case CHAR -> treeMaker.TypeIdent(TypeTag.CHAR);
+            case VOID -> treeMaker.TypeIdent(TypeTag.VOID);
+            case DECLARED -> {
+                DeclaredType declaredType = (DeclaredType) typeMirror;
+                TypeElement typeElement = (TypeElement) declaredType.asElement();
+                yield memberAccess(typeElement.getQualifiedName().toString());
+            }
+            default -> memberAccess(typeMirror.toString());
+        };
     }
 
     private JCTree.JCExpression memberAccess(String components){

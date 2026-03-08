@@ -34,8 +34,14 @@ public @interface MyDict {
     String defaultDesc() default "";
 
     /**
-     * 自定义字段注解
+     * 自定义描述字段注解。
      */
+    FieldAnnotation[] descFieldAnnotations() default {};
+
+    /**
+     * @deprecated 请改用 {@link #descFieldAnnotations()}，保留该属性用于兼容旧写法。
+     */
+    @Deprecated(since = "1.0.4-jdk21")
     FieldAnnotation[] fieldAnnotations() default {};
 
     /**

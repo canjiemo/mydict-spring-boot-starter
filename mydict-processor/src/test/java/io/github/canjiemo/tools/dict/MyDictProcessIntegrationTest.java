@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
+import java.lang.annotation.Annotation;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
@@ -13,6 +14,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -148,9 +150,317 @@ class MyDictProcessIntegrationTest {
         assertThat(result.output()).contains("@MyDict value and name must match");
     }
 
+    @Test
+    void compilesWhenUsingDescFieldAnnotationsWithExpandedTypes(@TempDir Path tempDir) throws Exception {
+        CompilationResult result = compile(tempDir, "sample.GeneratedFieldAnnotations", """
+                package sample;
+
+                import io.github.canjiemo.tools.dict.FieldAnnotation;
+                import io.github.canjiemo.tools.dict.MyDict;
+                import io.github.canjiemo.tools.dict.entity.Var;
+                import io.github.canjiemo.tools.dict.entity.VarType;
+
+                import java.lang.annotation.ElementType;
+                import java.lang.annotation.Retention;
+                import java.lang.annotation.RetentionPolicy;
+                import java.lang.annotation.Target;
+
+                public class GeneratedFieldAnnotations {
+                    @Retention(RetentionPolicy.RUNTIME)
+                    @Target(ElementType.FIELD)
+                    public @interface SampleMeta {
+                        String description();
+                        boolean hidden() default false;
+                        Class<?> implementation() default Void.class;
+                        SampleMode mode() default SampleMode.FIRST;
+                        String[] tags() default {};
+                        Class<?>[] groups() default {};
+                        SampleMode[] modes() default {};
+                    }
+
+                    public enum SampleMode {
+                        FIRST,
+                        SECOND
+                    }
+
+                    @MyDict(
+                        value = "status_dict",
+                        descFieldAnnotations = {
+                            @FieldAnnotation(
+                                fullAnnotationName = "sample.GeneratedFieldAnnotations.SampleMeta",
+                                vars = {
+                                    @Var(varType = VarType.STRING, varName = "description", varValue = "商品类型描述"),
+                                    @Var(varType = VarType.BOOLEAN, varName = "hidden", varValue = "true"),
+                                    @Var(varType = VarType.CLASS, varName = "implementation", varValue = "java.lang.String"),
+                                    @Var(varType = VarType.ENUM, varName = "mode", varValue = "SECOND"),
+                                    @Var(varType = VarType.STRING, varName = "tags", varValues = {"core", "dict"}),
+                                    @Var(varType = VarType.CLASS, varName = "groups", varValues = {"java.lang.String", "java.lang.Integer"}),
+                                    @Var(varType = VarType.ENUM, varName = "modes", varValues = {"FIRST", "SECOND"})
+                                }
+                            )
+                        }
+                    )
+                    private Integer status = 1;
+                }
+                """);
+
+        assertThat(result.exitCode()).isZero();
+        Class<?> compiledClass = result.loadClass("sample.GeneratedFieldAnnotations");
+        Field generatedField = compiledClass.getDeclaredField("statusDesc");
+        Annotation annotation = generatedField.getDeclaredAnnotations()[0];
+        Class<?> annotationType = annotation.annotationType();
+        assertThat(annotation).isNotNull();
+        assertThat(readAnnotationValue(annotationType, annotation, "description")).isEqualTo("商品类型描述");
+        assertThat(readAnnotationValue(annotationType, annotation, "hidden")).isEqualTo(true);
+        assertThat(readAnnotationValue(annotationType, annotation, "implementation")).isEqualTo(String.class);
+        assertThat(readAnnotationValue(annotationType, annotation, "mode").toString()).isEqualTo("SECOND");
+        assertThat(Arrays.asList((String[]) readAnnotationValue(annotationType, annotation, "tags")))
+                .containsExactly("core", "dict");
+        assertThat(Arrays.asList((Class<?>[]) readAnnotationValue(annotationType, annotation, "groups")))
+                .containsExactly(String.class, Integer.class);
+        assertThat(Arrays.stream((Object[]) readAnnotationValue(annotationType, annotation, "modes"))
+                .map(Object::toString)
+                .toList())
+                .containsExactly("FIRST", "SECOND");
+    }
+
+    @Test
+    void compilesWhenUsingDeprecatedFieldAnnotationsAlias(@TempDir Path tempDir) throws Exception {
+        CompilationResult result = compile(tempDir, "sample.LegacyFieldAnnotations", """
+                package sample;
+
+                import io.github.canjiemo.tools.dict.FieldAnnotation;
+                import io.github.canjiemo.tools.dict.MyDict;
+                import io.github.canjiemo.tools.dict.entity.Var;
+                import io.github.canjiemo.tools.dict.entity.VarType;
+
+                import java.lang.annotation.ElementType;
+                import java.lang.annotation.Retention;
+                import java.lang.annotation.RetentionPolicy;
+                import java.lang.annotation.Target;
+
+                public class LegacyFieldAnnotations {
+                    @Retention(RetentionPolicy.RUNTIME)
+                    @Target(ElementType.FIELD)
+                    public @interface LegacyMeta {
+                        String value();
+                    }
+
+                    @MyDict(
+                        value = "status_dict",
+                        fieldAnnotations = {
+                            @FieldAnnotation(
+                                fullAnnotationName = "sample.LegacyFieldAnnotations.LegacyMeta",
+                                vars = {
+                                    @Var(varType = VarType.STRING, varName = "value", varValue = "legacy")
+                                }
+                            )
+                        }
+                    )
+                    private Integer status = 1;
+                }
+                """);
+
+        assertThat(result.exitCode()).isZero();
+        Class<?> compiledClass = result.loadClass("sample.LegacyFieldAnnotations");
+        Field generatedField = compiledClass.getDeclaredField("statusDesc");
+        Annotation annotation = generatedField.getDeclaredAnnotations()[0];
+        Class<?> annotationType = annotation.annotationType();
+        assertThat(annotation).isNotNull();
+        assertThat(readAnnotationValue(annotationType, annotation, "value")).isEqualTo("legacy");
+    }
+
+    @Test
+    void failsWhenUsingNewAndLegacyAnnotationPropertiesTogether(@TempDir Path tempDir) throws Exception {
+        CompilationResult result = compile(tempDir, "sample.ConflictingDescAnnotations", """
+                package sample;
+
+                import io.github.canjiemo.tools.dict.FieldAnnotation;
+                import io.github.canjiemo.tools.dict.MyDict;
+                import io.github.canjiemo.tools.dict.entity.Var;
+                import io.github.canjiemo.tools.dict.entity.VarType;
+
+                import java.lang.annotation.ElementType;
+                import java.lang.annotation.Retention;
+                import java.lang.annotation.RetentionPolicy;
+                import java.lang.annotation.Target;
+
+                public class ConflictingDescAnnotations {
+                    @Retention(RetentionPolicy.RUNTIME)
+                    @Target(ElementType.FIELD)
+                    public @interface SampleMeta {
+                        String value();
+                    }
+
+                    @MyDict(
+                        value = "status_dict",
+                        descFieldAnnotations = {
+                            @FieldAnnotation(
+                                fullAnnotationName = "sample.ConflictingDescAnnotations.SampleMeta",
+                                vars = { @Var(varType = VarType.STRING, varName = "value", varValue = "new") }
+                            )
+                        },
+                        fieldAnnotations = {
+                            @FieldAnnotation(
+                                fullAnnotationName = "sample.ConflictingDescAnnotations.SampleMeta",
+                                vars = { @Var(varType = VarType.STRING, varName = "value", varValue = "old") }
+                            )
+                        }
+                    )
+                    private Integer status = 1;
+                }
+                """);
+
+        assertThat(result.exitCode()).isNotZero();
+        assertThat(result.output()).contains("cannot use descFieldAnnotations and deprecated fieldAnnotations at the same time");
+    }
+
+    @Test
+    void failsWhenDescAnnotationTypeDoesNotExist(@TempDir Path tempDir) throws Exception {
+        CompilationResult result = compile(tempDir, "sample.MissingDescAnnotationType", """
+                package sample;
+
+                import io.github.canjiemo.tools.dict.FieldAnnotation;
+                import io.github.canjiemo.tools.dict.MyDict;
+
+                public class MissingDescAnnotationType {
+                    @MyDict(
+                        value = "status_dict",
+                        descFieldAnnotations = {
+                            @FieldAnnotation(fullAnnotationName = "sample.DoesNotExist", vars = {})
+                        }
+                    )
+                    private Integer status = 1;
+                }
+                """);
+
+        assertThat(result.exitCode()).isNotZero();
+        assertThat(result.output()).contains("Cannot resolve desc field annotation type 'sample.DoesNotExist'");
+    }
+
+    @Test
+    void failsWhenDescAnnotationMemberDoesNotExist(@TempDir Path tempDir) throws Exception {
+        CompilationResult result = compile(tempDir, "sample.InvalidDescAnnotationMember", """
+                package sample;
+
+                import io.github.canjiemo.tools.dict.FieldAnnotation;
+                import io.github.canjiemo.tools.dict.MyDict;
+                import io.github.canjiemo.tools.dict.entity.Var;
+                import io.github.canjiemo.tools.dict.entity.VarType;
+
+                import java.lang.annotation.ElementType;
+                import java.lang.annotation.Retention;
+                import java.lang.annotation.RetentionPolicy;
+                import java.lang.annotation.Target;
+
+                public class InvalidDescAnnotationMember {
+                    @Retention(RetentionPolicy.RUNTIME)
+                    @Target(ElementType.FIELD)
+                    public @interface SampleMeta {
+                        String value();
+                    }
+
+                    @MyDict(
+                        value = "status_dict",
+                        descFieldAnnotations = {
+                            @FieldAnnotation(
+                                fullAnnotationName = "sample.InvalidDescAnnotationMember.SampleMeta",
+                                vars = {
+                                    @Var(varType = VarType.STRING, varName = "missing", varValue = "oops")
+                                }
+                            )
+                        }
+                    )
+                    private Integer status = 1;
+                }
+                """);
+
+        assertThat(result.exitCode()).isNotZero();
+        assertThat(result.output()).contains("does not declare member 'missing'");
+    }
+
+    @Test
+    void failsWhenRequiredDescAnnotationMemberIsMissing(@TempDir Path tempDir) throws Exception {
+        CompilationResult result = compile(tempDir, "sample.RequiredDescAnnotationMemberMissing", """
+                package sample;
+
+                import io.github.canjiemo.tools.dict.FieldAnnotation;
+                import io.github.canjiemo.tools.dict.MyDict;
+
+                import java.lang.annotation.ElementType;
+                import java.lang.annotation.Retention;
+                import java.lang.annotation.RetentionPolicy;
+                import java.lang.annotation.Target;
+
+                public class RequiredDescAnnotationMemberMissing {
+                    @Retention(RetentionPolicy.RUNTIME)
+                    @Target(ElementType.FIELD)
+                    public @interface SampleMeta {
+                        String description();
+                    }
+
+                    @MyDict(
+                        value = "status_dict",
+                        descFieldAnnotations = {
+                            @FieldAnnotation(
+                                fullAnnotationName = "sample.RequiredDescAnnotationMemberMissing.SampleMeta",
+                                vars = {}
+                            )
+                        }
+                    )
+                    private Integer status = 1;
+                }
+                """);
+
+        assertThat(result.exitCode()).isNotZero();
+        assertThat(result.output()).contains("requires member 'description'");
+    }
+
+    @Test
+    void failsWhenDescAnnotationMemberTypeDoesNotMatch(@TempDir Path tempDir) throws Exception {
+        CompilationResult result = compile(tempDir, "sample.DescAnnotationTypeMismatch", """
+                package sample;
+
+                import io.github.canjiemo.tools.dict.FieldAnnotation;
+                import io.github.canjiemo.tools.dict.MyDict;
+                import io.github.canjiemo.tools.dict.entity.Var;
+                import io.github.canjiemo.tools.dict.entity.VarType;
+
+                import java.lang.annotation.ElementType;
+                import java.lang.annotation.Retention;
+                import java.lang.annotation.RetentionPolicy;
+                import java.lang.annotation.Target;
+
+                public class DescAnnotationTypeMismatch {
+                    @Retention(RetentionPolicy.RUNTIME)
+                    @Target(ElementType.FIELD)
+                    public @interface SampleMeta {
+                        Class<?> implementation();
+                    }
+
+                    @MyDict(
+                        value = "status_dict",
+                        descFieldAnnotations = {
+                            @FieldAnnotation(
+                                fullAnnotationName = "sample.DescAnnotationTypeMismatch.SampleMeta",
+                                vars = {
+                                    @Var(varType = VarType.STRING, varName = "implementation", varValue = "java.lang.String")
+                                }
+                            )
+                        }
+                    )
+                    private Integer status = 1;
+                }
+                """);
+
+        assertThat(result.exitCode()).isNotZero();
+        assertThat(result.output()).contains("expects type 'java.lang.Class<?>', but received VarType.STRING");
+    }
+
     private CompilationResult compile(Path tempDir, String className, String source) throws Exception {
         Path classesDir = Files.createDirectories(tempDir.resolve("classes"));
-        Path sourceFile = tempDir.resolve(className + ".java");
+        Path sourceFile = tempDir.resolve(className.replace('.', '/') + ".java");
+        Files.createDirectories(sourceFile.getParent());
         Files.writeString(sourceFile, source, StandardCharsets.UTF_8);
 
         List<String> command = new ArrayList<>();
@@ -185,11 +495,19 @@ class MyDictProcessIntegrationTest {
         return count;
     }
 
+    private Object readAnnotationValue(Class<?> annotationType, Annotation annotation, String memberName) throws Exception {
+        Method method = annotationType.getDeclaredMethod(memberName);
+        method.setAccessible(true);
+        return method.invoke(annotation);
+    }
+
     private String normalizeOutput(String output) {
         return output.lines()
                 .filter(line -> !line.startsWith("Picked up JAVA_TOOL_OPTIONS:"))
                 .filter(line -> !line.startsWith("NOTE: Picked up JDK_JAVA_OPTIONS:"))
                 .filter(line -> !line.startsWith("Picked up _JAVA_OPTIONS:"))
+                .filter(line -> !line.startsWith("Note: "))
+                .filter(line -> !line.startsWith("注: "))
                 .map(String::trim)
                 .filter(line -> !line.isEmpty())
                 .reduce((left, right) -> left + System.lineSeparator() + right)
@@ -200,9 +518,8 @@ class MyDictProcessIntegrationTest {
         Class<?> loadClass(String className) throws IOException, ClassNotFoundException {
             assertThat(output).isEmpty();
             URL[] urls = {classesDir.toUri().toURL()};
-            try (URLClassLoader classLoader = new URLClassLoader(urls, MyDictProcessIntegrationTest.class.getClassLoader())) {
-                return classLoader.loadClass(className);
-            }
+            URLClassLoader classLoader = new URLClassLoader(urls, MyDictProcessIntegrationTest.class.getClassLoader());
+            return classLoader.loadClass(className);
         }
     }
 }

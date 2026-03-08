@@ -9,7 +9,13 @@ import java.lang.annotation.Target;
 @Target({})
 @Retention(RetentionPolicy.SOURCE)
 public @interface Var {
+    String UNSET = "<<__MYDICT_UNSET__>>";
+
     VarType varType();
+
     String varName();
-    String varValue();
+
+    String varValue() default UNSET;
+
+    String[] varValues() default {};
 }

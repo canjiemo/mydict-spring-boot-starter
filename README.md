@@ -40,7 +40,7 @@ mvn -pl mydict-spring-boot-starter -am package
 
 | 版本 | JDK要求 | Spring Boot | 配置要求 |
 |------|---------|-------------|----------|
-| 1.0.3-jdk21 | **JDK21-24+** | 3.0+ | Maven 编译器配置(一次性) |
+| 1.0.4-jdk21 | **JDK21-24+** | 3.0+ | Maven 编译器配置(一次性) |
 | 1.2 | JDK8+ | 2.x | 需要IDEA配置 |
 
 > **⚠️ JDK 24 用户注意**:
@@ -110,7 +110,7 @@ public class TestVO {
     <dependency>
         <groupId>io.github.canjiemo</groupId>
         <artifactId>mydict-spring-boot-starter</artifactId>
-        <version>1.0.3-jdk21</version>
+        <version>1.0.4-jdk21</version>
     </dependency>
 </dependencies>
 ```
@@ -338,7 +338,7 @@ private String type;
 @MyDict(
     name = "goods_type",
     defaultDesc = "默认商品",
-    fieldAnnotations = {
+    descFieldAnnotations = {
         @FieldAnnotation(
             fullAnnotationName = "io.swagger.v3.oas.annotations.media.Schema",
             vars = {
@@ -358,9 +358,16 @@ private Integer goodsType;
 private String goodsTypeDesc;
 ```
 
+补充说明：
+
+- `descFieldAnnotations` 用于给自动生成的 `xxxDesc` 字段追加注解
+- 旧属性 `fieldAnnotations` 仍兼容，但已废弃，建议迁移到 `descFieldAnnotations`
+- `VarType` 除了基础标量外，还支持 `CLASS`、`ENUM`
+- 数组类型使用 `varValues`，例如 `String[]`、`Class<?>[]`、枚举数组
+
 ## 🆚 与旧版本对比
 
-| 特性 | 旧版本(1.2) | 新版本(1.0.3-jdk21) |
+| 特性 | 旧版本(1.2) | 新版本(1.0.4-jdk21) |
 |------|------------|-----------------|
 | IDEA配置 | ❌ 需要手动配置VM参数 | ✅ 无需额外插件或共享 VM 参数 |
 | Maven配置 | 复杂 | 简单（一次性配置） |
@@ -544,7 +551,7 @@ private String goodsTypeDesc;
         <dependency>
             <groupId>io.github.canjiemo</groupId>
             <artifactId>mydict-spring-boot-starter</artifactId>
-            <version>1.0.3-jdk21</version>
+            <version>1.0.4-jdk21</version>
         </dependency>
 
         <!-- 可选：MyBatis-Plus支持 -->
@@ -629,7 +636,7 @@ mvn -pl mydict-spring-boot-starter -am package
 
 ## 📝 更新日志
 
-### 1.0.3-jdk21 当前版本
+### 1.0.4-jdk21 当前版本
 - ✅ 支持 JDK 21-24+ 和 Spring Boot 3.x
 - ✅ 移除对 tools.jar 的依赖
 - ✅ 现代化模块系统支持
