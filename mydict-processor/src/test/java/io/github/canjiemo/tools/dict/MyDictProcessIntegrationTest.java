@@ -101,6 +101,53 @@ class MyDictProcessIntegrationTest {
         assertThat(countMethods(compiledClass, "setStatusDesc")).isEqualTo(1);
     }
 
+    @Test
+    void compilesWhenUsingValueShortcut(@TempDir Path tempDir) throws Exception {
+        CompilationResult result = compile(tempDir, "ValueShortcut", """
+                import io.github.canjiemo.tools.dict.MyDict;
+
+                public class ValueShortcut {
+                    @MyDict("status_dict")
+                    private Integer status = 1;
+                }
+                """);
+
+        assertThat(result.exitCode()).isZero();
+        Class<?> compiledClass = result.loadClass("ValueShortcut");
+        assertThat(compiledClass.getDeclaredField("statusDesc")).isNotNull();
+        assertThat(compiledClass.getDeclaredMethod("getStatusDesc")).isNotNull();
+    }
+
+    @Test
+    void failsWhenDictNameIsMissing(@TempDir Path tempDir) throws Exception {
+        CompilationResult result = compile(tempDir, "MissingDictName", """
+                import io.github.canjiemo.tools.dict.MyDict;
+
+                public class MissingDictName {
+                    @MyDict
+                    private Integer status = 1;
+                }
+                """);
+
+        assertThat(result.exitCode()).isNotZero();
+        assertThat(result.output()).contains("@MyDict requires a dictionary name");
+    }
+
+    @Test
+    void failsWhenValueAndNameConflict(@TempDir Path tempDir) throws Exception {
+        CompilationResult result = compile(tempDir, "ConflictingDictName", """
+                import io.github.canjiemo.tools.dict.MyDict;
+
+                public class ConflictingDictName {
+                    @MyDict(value = "status_dict", name = "user_status")
+                    private Integer status = 1;
+                }
+                """);
+
+        assertThat(result.exitCode()).isNotZero();
+        assertThat(result.output()).contains("@MyDict value and name must match");
+    }
+
     private CompilationResult compile(Path tempDir, String className, String source) throws Exception {
         Path classesDir = Files.createDirectories(tempDir.resolve("classes"));
         Path sourceFile = tempDir.resolve(className + ".java");

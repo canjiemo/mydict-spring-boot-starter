@@ -44,6 +44,10 @@ public class MyDictProcess extends AbstractProcessor {
                 JCTree.JCVariableDecl jcVariableDecl = (JCTree.JCVariableDecl) trees.getTree(variableElement);
                 JCTree.JCClassDecl jcClassDecl = (JCTree.JCClassDecl) trees.getTree(variableElement.getEnclosingElement());
                 MyDict annotation = variableElement.getAnnotation(MyDict.class);
+                String dictName = resolveDictName(variableElement, annotation);
+                if (dictName == null) {
+                    continue;
+                }
                 if (isVariableExist(jcClassDecl, jcVariableDecl, annotation)) {
                     continue;
                 }
@@ -53,7 +57,7 @@ public class MyDictProcess extends AbstractProcessor {
 
                 Name getterName = getNewMethodName(0, jcVariableDecl.getName(), annotation);
                 if (!isMethodExist(jcClassDecl, getterName, 0)) {
-                    jcClassDecl.defs = jcClassDecl.defs.append(makeGetterMethodDecl(jcClassDecl, jcVariableDecl, annotation));
+                    jcClassDecl.defs = jcClassDecl.defs.append(makeGetterMethodDecl(jcClassDecl, jcVariableDecl, annotation, dictName));
                 }
 
                 Name setterName = getNewMethodName(1, jcVariableDecl.getName(), annotation);
@@ -69,6 +73,32 @@ public class MyDictProcess extends AbstractProcessor {
             }
         }
         return true;
+    }
+
+    private String resolveDictName(VariableElement variableElement, MyDict annotation) {
+        String value = annotation.value() == null ? "" : annotation.value().trim();
+        String name = annotation.name() == null ? "" : annotation.name().trim();
+
+        if (!value.isEmpty() && !name.isEmpty() && !value.equals(name)) {
+            messager.printMessage(
+                    Diagnostic.Kind.ERROR,
+                    "@MyDict value and name must match when both are set.",
+                    variableElement
+            );
+            return null;
+        }
+
+        String dictName = !name.isEmpty() ? name : value;
+        if (dictName.isEmpty()) {
+            messager.printMessage(
+                    Diagnostic.Kind.ERROR,
+                    "@MyDict requires a dictionary name, for example @MyDict(\"status_dict\") or @MyDict(name = \"status_dict\").",
+                    variableElement
+            );
+            return null;
+        }
+
+        return dictName;
     }
 
     private boolean isVariableExist(JCTree.JCClassDecl jcClassDecl, JCTree.JCVariableDecl jcVariableDecl, MyDict annotation){
@@ -180,7 +210,7 @@ public class MyDictProcess extends AbstractProcessor {
         return treeMaker.Select(treeMaker.Ident(names.fromString("this")), jcVariableDecl.getName());
     }
 
-    private JCTree.JCMethodDecl makeGetterMethodDecl(JCTree.JCClassDecl jcClassDecl, JCTree.JCVariableDecl jcVariableDecl,MyDict annotation) {
+    private JCTree.JCMethodDecl makeGetterMethodDecl(JCTree.JCClassDecl jcClassDecl, JCTree.JCVariableDecl jcVariableDecl,MyDict annotation, String dictName) {
         ListBuffer<JCTree.JCStatement> statements = new ListBuffer<>();
 
         JCTree.JCVariableDecl descStr = treeMaker.VarDef(
@@ -189,7 +219,7 @@ public class MyDictProcess extends AbstractProcessor {
                         treeMaker.Select(memberAccess("io.github.canjiemo.tools.dict.MyDictHelper"),
                                 elementUtils.getName("getDesc")),
                         List.<JCTree.JCExpression>of(
-                                treeMaker.Literal(annotation.name()),
+                                treeMaker.Literal(dictName),
                                 readOriginalFieldValue(jcClassDecl, jcVariableDecl)
                         )
                 ));

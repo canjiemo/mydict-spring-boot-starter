@@ -7,7 +7,7 @@
     <groupId>io.github.canjiemo</groupId>
     <artifactId>mydict-parent</artifactId>
     <packaging>pom</packaging>
-    <version>1.0.2-jdk21</version>
+    <version>1.0.3-jdk21</version>
     <name>${project.artifactId}-${project.version}</name>
     <description>Parent build for MyDict Spring Boot Starter</description>
 

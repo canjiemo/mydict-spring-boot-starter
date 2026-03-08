@@ -40,7 +40,7 @@ mvn -pl mydict-spring-boot-starter -am package
 
 | 版本 | JDK要求 | Spring Boot | 配置要求 |
 |------|---------|-------------|----------|
-| 1.0.2-jdk21 | **JDK21-24+** | 3.0+ | Maven 编译器配置(一次性) |
+| 1.0.3-jdk21 | **JDK21-24+** | 3.0+ | Maven 编译器配置(一次性) |
 | 1.2 | JDK8+ | 2.x | 需要IDEA配置 |
 
 > **⚠️ JDK 24 用户注意**:
@@ -53,15 +53,17 @@ mvn -pl mydict-spring-boot-starter -am package
 ```java
 @Data
 public class TestVO {
-    @MyDict(name = "gt_dict", defaultDesc = "未知类型")
+    @MyDict(value = "gt_dict", defaultDesc = "未知类型")
     private Integer goodsType = 1;
 
-    @MyDict(name = "status_dict")
+    @MyDict("status_dict")
     private String status = "ACTIVE";
 }
 ```
 
 > 源字段不要求手写 getter；处理器会优先调用 getter，不存在时回退为直接读字段。
+>
+> `@MyDict("xxx")` 仅适用于只传字典名；如果还要传 `defaultDesc`、`camelCase` 等其他属性，请写成 `@MyDict(value = "xxx", ...)` 或 `@MyDict(name = "xxx", ...)`。
 
 ### 编译后自动生成：
 ```java
@@ -108,7 +110,7 @@ public class TestVO {
     <dependency>
         <groupId>io.github.canjiemo</groupId>
         <artifactId>mydict-spring-boot-starter</artifactId>
-        <version>1.0.2-jdk21</version>
+        <version>1.0.3-jdk21</version>
     </dependency>
 </dependencies>
 ```
@@ -231,10 +233,10 @@ public class DictServiceImpl implements IMyDict {
 @Data
 @Entity
 public class User {
-    @MyDict(name = "user_status", defaultDesc = "未知状态")
+    @MyDict(value = "user_status", defaultDesc = "未知状态")
     private Integer status;
 
-    @MyDict(name = "user_type")
+    @MyDict("user_type")
     private String type;
 }
 ```
@@ -358,7 +360,7 @@ private String goodsTypeDesc;
 
 ## 🆚 与旧版本对比
 
-| 特性 | 旧版本(1.2) | 新版本(1.0.2-jdk21) |
+| 特性 | 旧版本(1.2) | 新版本(1.0.3-jdk21) |
 |------|------------|-----------------|
 | IDEA配置 | ❌ 需要手动配置VM参数 | ✅ 无需额外插件或共享 VM 参数 |
 | Maven配置 | 复杂 | 简单（一次性配置） |
@@ -542,7 +544,7 @@ private String goodsTypeDesc;
         <dependency>
             <groupId>io.github.canjiemo</groupId>
             <artifactId>mydict-spring-boot-starter</artifactId>
-            <version>1.0.2-jdk21</version>
+            <version>1.0.3-jdk21</version>
         </dependency>
 
         <!-- 可选：MyBatis-Plus支持 -->
@@ -627,7 +629,7 @@ mvn -pl mydict-spring-boot-starter -am package
 
 ## 📝 更新日志
 
-### 1.0.2-jdk21 当前版本
+### 1.0.3-jdk21 当前版本
 - ✅ 支持 JDK 21-24+ 和 Spring Boot 3.x
 - ✅ 移除对 tools.jar 的依赖
 - ✅ 现代化模块系统支持

@@ -15,9 +15,18 @@ import java.lang.annotation.Target;
 @Retention(RetentionPolicy.SOURCE)
 public @interface MyDict {
     /**
-     * 字典名称
+     * 字典名称简写。
+     * <p>
+     * 仅在单独传递字典名时可简写为 {@code @MyDict("xxx")}。
      */
-    String name();
+    String value() default "";
+
+    /**
+     * 字典名称。
+     * <p>
+     * 与 {@link #value()} 二选一即可，保留该属性用于兼容旧写法。
+     */
+    String name() default "";
 
     /**
      * 默认描述（当字典查询为空时返回）
