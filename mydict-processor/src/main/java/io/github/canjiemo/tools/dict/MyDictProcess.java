@@ -560,13 +560,30 @@ public class MyDictProcess extends AbstractProcessor {
     }
 
     /**
-     * 生成 getter/setter 方法名，自动处理驼峰命名和蛇形命名
+     * 生成 getter/setter 方法名，自动处理驼峰命名和蛇形命名。
+     * 蛇形字段名（如 user_status_desc）按 Java 约定转为驼峰（getUserStatusDesc），
+     * 保持与 Lombok、IDEA 插件一致。
      */
     private Name getNewMethodName(int methodType, Name name, MyDict annotation) {
         name = getNewDictVarName(name, annotation);
-        String s = name.toString();
         String pref = methodType == 0 ? "get" : "set";
-        return names.fromString(pref + s.substring(0, 1).toUpperCase() + s.substring(1));
+        return names.fromString(pref + toAccessorSuffix(name.toString()));
+    }
+
+    /**
+     * 将字段名转为访问器后缀（首字母大写，蛇形转驼峰）。
+     * 例如：statusDesc → StatusDesc，user_status_desc → UserStatusDesc，a_desc → ADesc
+     */
+    private String toAccessorSuffix(String fieldName) {
+        String[] parts = fieldName.split("_");
+        StringBuilder sb = new StringBuilder();
+        for (String part : parts) {
+            if (!part.isEmpty()) {
+                sb.append(Character.toUpperCase(part.charAt(0)));
+                sb.append(part.substring(1));
+            }
+        }
+        return sb.toString();
     }
 
     private boolean isMethodExist(JCTree.JCClassDecl jcClassDecl, Name methodName, int parameterCount) {
