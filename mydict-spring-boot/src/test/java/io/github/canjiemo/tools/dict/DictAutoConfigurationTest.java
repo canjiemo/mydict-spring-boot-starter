@@ -30,7 +30,6 @@ class DictAutoConfigurationTest {
                     assertThat(properties.getTtl()).isEqualTo(45);
                     assertThat(properties.getMaxSize()).isEqualTo(123);
                     assertThat(properties.isRecordStats()).isTrue();
-                    assertThat(MyDictHelper.getCacheProperties()).isSameAs(properties);
                 });
     }
 }

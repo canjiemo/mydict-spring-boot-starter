@@ -21,9 +21,9 @@ class MyDictHelperTest {
         properties.setTtl(60);
 
         AtomicInteger invocations = new AtomicInteger();
-        new MyDictHelper((name, value) -> {
+        new MyDictHelper((type, value) -> {
             invocations.incrementAndGet();
-            return name + ":" + value;
+            return type + ":" + value;
         }, properties);
 
         assertThat(MyDictHelper.getDesc("status", "1")).isEqualTo("status:1");
@@ -42,9 +42,9 @@ class MyDictHelperTest {
         enabled.setEnabled(true);
 
         AtomicInteger cachedInvocations = new AtomicInteger();
-        new MyDictHelper((name, value) -> {
+        new MyDictHelper((type, value) -> {
             cachedInvocations.incrementAndGet();
-            return name + ":" + value;
+            return type + ":" + value;
         }, enabled);
 
         assertThat(MyDictHelper.getDesc("status", "1")).isEqualTo("status:1");
@@ -54,13 +54,34 @@ class MyDictHelperTest {
         disabled.setEnabled(false);
 
         AtomicInteger uncachedInvocations = new AtomicInteger();
-        new MyDictHelper((name, value) -> {
+        new MyDictHelper((type, value) -> {
             int current = uncachedInvocations.incrementAndGet();
-            return name + ":" + value + ":" + current;
+            return type + ":" + value + ":" + current;
         }, disabled);
 
         assertThat(MyDictHelper.getDesc("status", "1")).isEqualTo("status:1:1");
         assertThat(MyDictHelper.getDesc("status", "1")).isEqualTo("status:1:2");
         assertThat(uncachedInvocations).hasValue(2);
+    }
+
+    @Test
+    void getCacheStatsReturnsEmptyWhenCacheDisabled() {
+        MyDictCacheProperties disabled = new MyDictCacheProperties();
+        disabled.setEnabled(false);
+        new MyDictHelper((type, value) -> "", disabled);
+
+        assertThat(MyDictHelper.getCacheStats()).isEmpty();
+    }
+
+    @Test
+    void getCacheStatsReturnsPresentWhenCacheEnabled() {
+        MyDictCacheProperties enabled = new MyDictCacheProperties();
+        enabled.setEnabled(true);
+        enabled.setRecordStats(true);
+        new MyDictHelper((type, value) -> type + ":" + value, enabled);
+
+        MyDictHelper.getDesc("status", "1");
+
+        assertThat(MyDictHelper.getCacheStats()).isPresent();
     }
 }

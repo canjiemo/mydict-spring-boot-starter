@@ -7,23 +7,32 @@
     <parent>
         <groupId>io.github.canjiemo</groupId>
         <artifactId>mydict-parent</artifactId>
-        <version>1.0.4-jdk21</version>
+        <version>1.0.5-jdk21</version>
         <relativePath>../pom.xml</relativePath>
     </parent>
 
     <artifactId>mydict-spring-boot-starter</artifactId>
     <packaging>jar</packaging>
     <name>${project.artifactId}-${project.version}</name>
-    <description>Starter dependency for MyDict on Spring Boot</description>
+    <description>Spring Boot integration for MyDict - auto-configuration and starter</description>
 
     <dependencies>
+        <dependency>
+            <groupId>io.github.canjiemo</groupId>
+            <artifactId>mydict-core</artifactId>
+        </dependency>
         <dependency>
             <groupId>io.github.canjiemo</groupId>
             <artifactId>mydict-processor</artifactId>
         </dependency>
         <dependency>
-            <groupId>io.github.canjiemo</groupId>
-            <artifactId>mydict-spring-boot-autoconfigure</artifactId>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-autoconfigure</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
         </dependency>
     </dependencies>
 </project>

@@ -22,7 +22,6 @@ import javax.lang.model.element.TypeElement;
 import javax.lang.model.element.VariableElement;
 import javax.lang.model.type.ArrayType;
 import javax.lang.model.type.DeclaredType;
-import javax.lang.model.type.NoType;
 import javax.lang.model.type.TypeKind;
 import javax.lang.model.type.TypeMirror;
 import javax.tools.Diagnostic;
@@ -51,17 +50,14 @@ public class MyDictProcess extends AbstractProcessor {
 
     @Override
     public boolean process(Set<? extends TypeElement> annotations, RoundEnvironment roundEnv) {
-
-        elementUtils = (JavacElements) processingEnv.getElementUtils();
-
         for (Element element : roundEnv.getElementsAnnotatedWith(MyDict.class)) {
             VariableElement variableElement = (VariableElement) element;
             try {
                 JCTree.JCVariableDecl jcVariableDecl = (JCTree.JCVariableDecl) trees.getTree(variableElement);
                 JCTree.JCClassDecl jcClassDecl = (JCTree.JCClassDecl) trees.getTree(variableElement.getEnclosingElement());
                 MyDict annotation = variableElement.getAnnotation(MyDict.class);
-                String dictName = resolveDictName(variableElement, annotation);
-                if (dictName == null) {
+                String dictType = resolveDictType(variableElement, annotation);
+                if (dictType == null) {
                     continue;
                 }
                 java.util.List<ResolvedDescAnnotation> descFieldAnnotations = resolveDescFieldAnnotations(variableElement, annotation);
@@ -77,7 +73,7 @@ public class MyDictProcess extends AbstractProcessor {
 
                 Name getterName = getNewMethodName(0, jcVariableDecl.getName(), annotation);
                 if (!isMethodExist(jcClassDecl, getterName, 0)) {
-                    jcClassDecl.defs = jcClassDecl.defs.append(makeGetterMethodDecl(jcClassDecl, jcVariableDecl, annotation, dictName));
+                    jcClassDecl.defs = jcClassDecl.defs.append(makeGetterMethodDecl(jcClassDecl, jcVariableDecl, annotation, dictType));
                 }
 
                 Name setterName = getNewMethodName(1, jcVariableDecl.getName(), annotation);
@@ -95,55 +91,26 @@ public class MyDictProcess extends AbstractProcessor {
         return true;
     }
 
-    private String resolveDictName(VariableElement variableElement, MyDict annotation) {
-        String value = annotation.value() == null ? "" : annotation.value().trim();
-        String name = annotation.name() == null ? "" : annotation.name().trim();
-
-        if (!value.isEmpty() && !name.isEmpty() && !value.equals(name)) {
+    private String resolveDictType(VariableElement variableElement, MyDict annotation) {
+        String dictType = annotation.type() == null ? "" : annotation.type().trim();
+        if (dictType.isEmpty()) {
             messager.printMessage(
                     Diagnostic.Kind.ERROR,
-                    "@MyDict value and name must match when both are set.",
+                    "@MyDict requires a dictionary type, for example @MyDict(type = \"user_status\").",
                     variableElement
             );
             return null;
         }
-
-        String dictName = !name.isEmpty() ? name : value;
-        if (dictName.isEmpty()) {
-            messager.printMessage(
-                    Diagnostic.Kind.ERROR,
-                    "@MyDict requires a dictionary name, for example @MyDict(\"status_dict\") or @MyDict(name = \"status_dict\").",
-                    variableElement
-            );
-            return null;
-        }
-
-        return dictName;
+        return dictType;
     }
 
     private java.util.List<ResolvedDescAnnotation> resolveDescFieldAnnotations(VariableElement variableElement, MyDict annotation) {
         FieldAnnotation[] descFieldAnnotations = annotation.descFieldAnnotations() == null
                 ? new FieldAnnotation[0]
                 : annotation.descFieldAnnotations();
-        FieldAnnotation[] legacyFieldAnnotations = annotation.fieldAnnotations() == null
-                ? new FieldAnnotation[0]
-                : annotation.fieldAnnotations();
-
-        if (descFieldAnnotations.length > 0 && legacyFieldAnnotations.length > 0) {
-            messager.printMessage(
-                    Diagnostic.Kind.ERROR,
-                    "@MyDict cannot use descFieldAnnotations and deprecated fieldAnnotations at the same time.",
-                    variableElement
-            );
-            return null;
-        }
-
-        FieldAnnotation[] effectiveAnnotations = descFieldAnnotations.length > 0
-                ? descFieldAnnotations
-                : legacyFieldAnnotations;
 
         java.util.List<ResolvedDescAnnotation> resolvedAnnotations = new ArrayList<>();
-        for (FieldAnnotation descFieldAnnotation : effectiveAnnotations) {
+        for (FieldAnnotation descFieldAnnotation : descFieldAnnotations) {
             ResolvedDescAnnotation resolvedAnnotation = resolveDescFieldAnnotation(variableElement, descFieldAnnotation);
             if (resolvedAnnotation == null) {
                 return null;
@@ -247,37 +214,34 @@ public class MyDictProcess extends AbstractProcessor {
         return members;
     }
 
-    private boolean isVariableExist(JCTree.JCClassDecl jcClassDecl, JCTree.JCVariableDecl jcVariableDecl, MyDict annotation){
+    private boolean isVariableExist(JCTree.JCClassDecl jcClassDecl, JCTree.JCVariableDecl jcVariableDecl, MyDict annotation) {
         Name dictVarName = getNewDictVarName(jcVariableDecl.getName(), annotation);
-        return jcClassDecl.defs.stream().filter(x -> {
-            if (x.getTree() instanceof JCTree.JCVariableDecl) {
-                JCTree.JCVariableDecl tree = (JCTree.JCVariableDecl) x.getTree();
+        return jcClassDecl.defs.stream().anyMatch(x -> {
+            if (x.getTree() instanceof JCTree.JCVariableDecl tree) {
                 return tree.getName().toString().equals(dictVarName.toString());
-            }else {
-                return false;
             }
-        }).findAny().isPresent();
+            return false;
+        });
     }
 
-    private JCTree.JCVariableDecl makeDictDescFieldDecl(JCTree.JCVariableDecl jcVariableDecl,MyDict dict, java.util.List<ResolvedDescAnnotation> descFieldAnnotations) {
+    private JCTree.JCVariableDecl makeDictDescFieldDecl(JCTree.JCVariableDecl jcVariableDecl, MyDict dict, java.util.List<ResolvedDescAnnotation> descFieldAnnotations) {
         treeMaker.pos = jcVariableDecl.pos;
         ListBuffer<JCTree.JCAnnotation> annotationsList = new ListBuffer<>();
         try {
-            // 检查MyBatis-Plus是否存在于classpath
             Class.forName("com.baomidou.mybatisplus.annotation.TableField");
             JCTree.JCExpression attr1 = treeMaker.Assign(treeMaker.Ident(names.fromString("exist")),
                     treeMaker.Literal(false));
             JCTree.JCAnnotation jcAnnotation = treeMaker.Annotation(memberAccess("com.baomidou.mybatisplus.annotation.TableField"),
                     List.of(attr1));
             annotationsList.append(jcAnnotation);
-        }catch (Throwable e){
-            // MyBatis-Plus不存在，跳过添加@TableField注解
+        } catch (Throwable e) {
+            // MyBatis-Plus 不存在，跳过添加 @TableField 注解
         }
         for (ResolvedDescAnnotation annotation : descFieldAnnotations) {
             annotationsList.append(treeMaker.Annotation(memberAccess(annotation.fullAnnotationName()), annotation.arguments()));
         }
         long generatedFieldFlags = jcVariableDecl.getModifiers().flags & ~Flags.FINAL;
-        return treeMaker.VarDef(treeMaker.Modifiers(generatedFieldFlags,annotationsList.toList()),getNewDictVarName(jcVariableDecl.getName(), dict),memberAccess("java.lang.String"), null);
+        return treeMaker.VarDef(treeMaker.Modifiers(generatedFieldFlags, annotationsList.toList()), getNewDictVarName(jcVariableDecl.getName(), dict), memberAccess("java.lang.String"), null);
     }
 
     private JCTree.JCExpression buildAnnotationMemberValue(VariableElement variableElement, String annotationName, ExecutableElement member, Var var) {
@@ -308,12 +272,7 @@ public class MyDictProcess extends AbstractProcessor {
             ListBuffer<JCTree.JCExpression> expressions = new ListBuffer<>();
             for (String rawValue : rawValues) {
                 JCTree.JCExpression expression = buildScalarAnnotationValueExpression(
-                        variableElement,
-                        annotationName,
-                        member,
-                        arrayType.getComponentType(),
-                        var.varType(),
-                        rawValue
+                        variableElement, annotationName, member, arrayType.getComponentType(), var.varType(), rawValue
                 );
                 if (expression == null) {
                     return null;
@@ -340,14 +299,7 @@ public class MyDictProcess extends AbstractProcessor {
             return null;
         }
 
-        return buildScalarAnnotationValueExpression(
-                variableElement,
-                annotationName,
-                member,
-                memberType,
-                var.varType(),
-                var.varValue()
-        );
+        return buildScalarAnnotationValueExpression(variableElement, annotationName, member, memberType, var.varType(), var.varValue());
     }
 
     private JCTree.JCExpression buildScalarAnnotationValueExpression(
@@ -393,12 +345,7 @@ public class MyDictProcess extends AbstractProcessor {
                     yield treeMaker.Literal(TypeTag.CHAR, Integer.valueOf(parseChar(rawValue)));
                 }
                 case DECLARED -> buildDeclaredAnnotationValueExpression(
-                        variableElement,
-                        annotationName,
-                        member,
-                        (DeclaredType) expectedType,
-                        actualType,
-                        rawValue
+                        variableElement, annotationName, member, (DeclaredType) expectedType, actualType, rawValue
                 );
                 default -> unsupportedAnnotationMemberType(variableElement, annotationName, member, expectedType);
             };
@@ -603,55 +550,23 @@ public class MyDictProcess extends AbstractProcessor {
         return null;
     }
 
-    private JCTree.JCExpression typeTree(TypeMirror typeMirror) {
-        return switch (typeMirror.getKind()) {
-            case BOOLEAN -> treeMaker.TypeIdent(TypeTag.BOOLEAN);
-            case BYTE -> treeMaker.TypeIdent(TypeTag.BYTE);
-            case SHORT -> treeMaker.TypeIdent(TypeTag.SHORT);
-            case INT -> treeMaker.TypeIdent(TypeTag.INT);
-            case LONG -> treeMaker.TypeIdent(TypeTag.LONG);
-            case FLOAT -> treeMaker.TypeIdent(TypeTag.FLOAT);
-            case DOUBLE -> treeMaker.TypeIdent(TypeTag.DOUBLE);
-            case CHAR -> treeMaker.TypeIdent(TypeTag.CHAR);
-            case VOID -> treeMaker.TypeIdent(TypeTag.VOID);
-            case DECLARED -> {
-                DeclaredType declaredType = (DeclaredType) typeMirror;
-                TypeElement typeElement = (TypeElement) declaredType.asElement();
-                yield memberAccess(typeElement.getQualifiedName().toString());
-            }
-            default -> memberAccess(typeMirror.toString());
-        };
-    }
-
-    private JCTree.JCExpression memberAccess(String components){
+    private JCTree.JCExpression memberAccess(String components) {
         String[] componentArray = components.split("\\.");
-        JCTree.JCExpression expr = treeMaker.Ident(getNameFromString(componentArray[0]));
-        for (int i=1;i<componentArray.length;i++){
-            expr = treeMaker.Select(expr,getNameFromString(componentArray[i]));
+        JCTree.JCExpression expr = treeMaker.Ident(names.fromString(componentArray[0]));
+        for (int i = 1; i < componentArray.length; i++) {
+            expr = treeMaker.Select(expr, names.fromString(componentArray[i]));
         }
         return expr;
     }
 
     /**
-     * 生成 getter/setter 方法名
-     * 自动处理驼峰命名和蛇形命名
-     *
-     * 示例：
-     * - sexTypeDesc -> getSexTypeDesc / setSexTypeDesc
-     * - sex_type_desc -> getSex_type_desc / setSex_type_desc
+     * 生成 getter/setter 方法名，自动处理驼峰命名和蛇形命名
      */
     private Name getNewMethodName(int methodType, Name name, MyDict annotation) {
         name = getNewDictVarName(name, annotation);
         String s = name.toString();
-        String pref = methodType==0?"get":"set";
-
-        // 如果是蛇形命名，保持原样（只在前面加 get/set）
-        if (s.contains("_")) {
-            return names.fromString(pref + s.substring(0, 1).toUpperCase() + s.substring(1));
-        }
-
-        // 驼峰命名：首字母大写
-        return names.fromString(pref + s.substring(0, 1).toUpperCase() + s.substring(1, name.length()));
+        String pref = methodType == 0 ? "get" : "set";
+        return names.fromString(pref + s.substring(0, 1).toUpperCase() + s.substring(1));
     }
 
     private boolean isMethodExist(JCTree.JCClassDecl jcClassDecl, Name methodName, int parameterCount) {
@@ -672,26 +587,24 @@ public class MyDictProcess extends AbstractProcessor {
                     List.nil()
             );
         }
-
         return treeMaker.Select(treeMaker.Ident(names.fromString("this")), jcVariableDecl.getName());
     }
 
-    private JCTree.JCMethodDecl makeGetterMethodDecl(JCTree.JCClassDecl jcClassDecl, JCTree.JCVariableDecl jcVariableDecl,MyDict annotation, String dictName) {
+    private JCTree.JCMethodDecl makeGetterMethodDecl(JCTree.JCClassDecl jcClassDecl, JCTree.JCVariableDecl jcVariableDecl, MyDict annotation, String dictType) {
         ListBuffer<JCTree.JCStatement> statements = new ListBuffer<>();
 
         JCTree.JCVariableDecl descStr = treeMaker.VarDef(
-                treeMaker.Modifiers(0), names.fromString("descStr"), memberAccess("java.lang.String"),treeMaker.Apply(
+                treeMaker.Modifiers(0), names.fromString("descStr"), memberAccess("java.lang.String"), treeMaker.Apply(
                         List.<JCTree.JCExpression>nil(),
                         treeMaker.Select(memberAccess("io.github.canjiemo.tools.dict.MyDictHelper"),
                                 elementUtils.getName("getDesc")),
                         List.<JCTree.JCExpression>of(
-                                treeMaker.Literal(dictName),
+                                treeMaker.Literal(dictType),
                                 readOriginalFieldValue(jcClassDecl, jcVariableDecl)
                         )
                 ));
         statements.append(descStr);
 
-        // Check if descStr is not null and not empty: descStr != null && !descStr.isEmpty()
         JCTree.JCBinary notNull = treeMaker.Binary(
                 JCTree.Tag.NE,
                 treeMaker.Ident(names.fromString("descStr")),
@@ -700,89 +613,51 @@ public class MyDictProcess extends AbstractProcessor {
 
         JCTree.JCMethodInvocation isEmptyCall = treeMaker.Apply(
                 com.sun.tools.javac.util.List.nil(),
-                treeMaker.Select(treeMaker.Ident(names.fromString("descStr")),
-                        elementUtils.getName("isEmpty")),
+                treeMaker.Select(treeMaker.Ident(names.fromString("descStr")), elementUtils.getName("isEmpty")),
                 com.sun.tools.javac.util.List.nil()
         );
 
         JCTree.JCUnary notEmpty = treeMaker.Unary(JCTree.Tag.NOT, isEmptyCall);
-
-        JCTree.JCBinary condition = treeMaker.Binary(
-                JCTree.Tag.AND,
-                notNull,
-                notEmpty
-        );
+        JCTree.JCBinary condition = treeMaker.Binary(JCTree.Tag.AND, notNull, notEmpty);
 
         JCTree.JCStatement ifTrue = treeMaker.Return(treeMaker.Ident(names.fromString("descStr")));
-        JCTree.JCStatement ifFlase = treeMaker.Return(treeMaker.Literal(annotation.defaultDesc()));
+        JCTree.JCStatement ifFalse = treeMaker.Return(treeMaker.Literal(annotation.defaultDesc()));
 
-        JCTree.JCIf anIf = treeMaker.If(
-                condition,
-                ifTrue,
-                ifFlase
-        );
-        statements.append(anIf);
+        statements.append(treeMaker.If(condition, ifTrue, ifFalse));
         JCTree.JCBlock body = treeMaker.Block(0, statements.toList());
-        return treeMaker.MethodDef(treeMaker.Modifiers(Flags.PUBLIC), getNewMethodName(0,jcVariableDecl.getName(), annotation), memberAccess("java.lang.String"), List.nil(), List.nil(), List.nil(), body, null);
+        return treeMaker.MethodDef(treeMaker.Modifiers(Flags.PUBLIC), getNewMethodName(0, jcVariableDecl.getName(), annotation), memberAccess("java.lang.String"), List.nil(), List.nil(), List.nil(), body, null);
     }
-
-    private Name getNameFromString(String s){
-        return names.fromString(s);
-    }
-
-    private Name getVarName(Name name) {
-        return names.fromString(name.toString());
-    }
-
 
     /**
      * 根据原字段名的命名风格，生成对应的描述字段名
-     * 支持驼峰命名和蛇形命名的自动识别
      *
      * 命名规则（优先级从高到低）：
-     * 1. 如果字段名包含下划线，忽略注解开关，始终生成蛇形命名
-     * 2. 如果字段名包含大小写混合，忽略注解开关，始终生成驼峰命名
-     * 3. 如果字段名全小写无特征，则根据注解的 camelCase 开关决定
-     *
-     * 示例：
-     * - user_status -> user_status_desc (自动识别蛇形)
-     * - userName -> userNameDesc (自动识别驼峰)
-     * - type + camelCase=true -> typeDesc (开关控制)
-     * - type + camelCase=false -> type_desc (开关控制)
+     * 1. 包含下划线 → 蛇形（user_status → user_status_desc / SEX_TYPE → SEX_TYPE_DESC）
+     * 2. 大小写混合 → 驼峰（userName → userNameDesc）
+     * 3. 全小写，根据 camelCase 开关决定（type → typeDesc 或 type_desc）
      */
     private Name getNewDictVarName(Name name, MyDict annotation) {
         String originalName = name.toString();
 
-        // 优先级1：如果包含下划线，始终使用蛇形命名
         if (originalName.contains("_")) {
-            // 判断原名是否全大写
             if (originalName.equals(originalName.toUpperCase())) {
-                // 全大写蛇形：SEX_TYPE -> SEX_TYPE_DESC
                 return names.fromString(originalName + "_DESC");
             } else {
-                // 小写或混合蛇形：sex_type -> sex_type_desc
                 return names.fromString(originalName + "_desc");
             }
         }
 
-        // 优先级2：如果包含大小写混合（驼峰），使用驼峰命名
         if (hasMixedCase(originalName)) {
             return names.fromString(originalName + "Desc");
         }
 
-        // 优先级3：全小写无特征，根据注解开关决定
         if (annotation.camelCase()) {
-            // 使用驼峰：type -> typeDesc
             return names.fromString(originalName + "Desc");
         } else {
-            // 使用蛇形：type -> type_desc
             return names.fromString(originalName + "_desc");
         }
     }
 
-    /**
-     * 判断字符串是否包含大小写混合（驼峰命名特征）
-     */
     private boolean hasMixedCase(String str) {
         boolean hasLower = false;
         boolean hasUpper = false;
@@ -796,44 +671,33 @@ public class MyDictProcess extends AbstractProcessor {
 
     private Name getterMethodName(JCTree.JCVariableDecl jcVariableDecl) {
         String s = jcVariableDecl.getName().toString();
-        return names.fromString("get" + s.substring(0, 1).toUpperCase() + s.substring(1, jcVariableDecl.getName().length()));
+        return names.fromString("get" + s.substring(0, 1).toUpperCase() + s.substring(1));
     }
 
-    private Name setterMethodName(JCTree.JCVariableDecl jcVariableDecl) {
-        String s = jcVariableDecl.getName().toString();
-        return names.fromString("set" + s.substring(0, 1).toUpperCase() + s.substring(1, jcVariableDecl.getName().length()));
-    }
-
-    private JCTree.JCMethodDecl makeSetterMethod(JCTree.JCVariableDecl jcVariableDecl, MyDict annotation){
+    private JCTree.JCMethodDecl makeSetterMethod(JCTree.JCVariableDecl jcVariableDecl, MyDict annotation) {
         JCTree.JCModifiers jcModifiers = treeMaker.Modifiers(Flags.PUBLIC);
-        JCTree.JCExpression retrunType = treeMaker.TypeIdent(TypeTag.VOID);
-        List<JCTree.JCVariableDecl> parameters = List.nil();
+        JCTree.JCExpression returnType = treeMaker.TypeIdent(TypeTag.VOID);
         JCTree.JCVariableDecl param = treeMaker.VarDef(
                 treeMaker.Modifiers(Flags.PARAMETER), getNewDictVarName(jcVariableDecl.name, annotation), memberAccess("java.lang.String"), null);
         param.pos = jcVariableDecl.pos;
-        parameters = parameters.append(param);
+        List<JCTree.JCVariableDecl> parameters = List.of(param);
         JCTree.JCStatement jcStatement = treeMaker.Exec(treeMaker.Assign(
                 treeMaker.Select(treeMaker.Ident(names.fromString("this")), getNewDictVarName(jcVariableDecl.name, annotation)),
                 treeMaker.Ident(getNewDictVarName(jcVariableDecl.name, annotation))));
-        List<JCTree.JCStatement> jcStatementList = List.nil();
-        jcStatementList = jcStatementList.append(jcStatement);
-        JCTree.JCBlock jcBlock = treeMaker.Block(0, jcStatementList);
-        List<JCTree.JCTypeParameter> methodGenericParams = List.nil();
-        List<JCTree.JCExpression> throwsClauses = List.nil();
-        JCTree.JCMethodDecl jcMethodDecl = treeMaker.MethodDef(jcModifiers, getNewMethodName(1,jcVariableDecl.getName(), annotation), retrunType, methodGenericParams, parameters, throwsClauses, jcBlock,  null);
-        return jcMethodDecl;
+        JCTree.JCBlock jcBlock = treeMaker.Block(0, List.of(jcStatement));
+        return treeMaker.MethodDef(jcModifiers, getNewMethodName(1, jcVariableDecl.getName(), annotation), returnType, List.nil(), parameters, List.nil(), jcBlock, null);
     }
 
     @Override
     public synchronized void init(ProcessingEnvironment processingEnv) {
         super.init(processingEnv);
         this.messager = processingEnv.getMessager();
-        // 解包 IDEA 的 Proxy，兼容增量编译
         ProcessingEnvironment unwrapped = unwrapProcessingEnvironment(processingEnv);
         this.trees = JavacTrees.instance(unwrapped);
         Context context = ((JavacProcessingEnvironment) unwrapped).getContext();
         this.treeMaker = TreeMaker.instance(context);
         this.names = Names.instance(context);
+        this.elementUtils = (JavacElements) processingEnv.getElementUtils();
     }
 
     /**
@@ -841,32 +705,19 @@ public class MyDictProcess extends AbstractProcessor {
      *
      * IDEA 的增量编译环境会将 ProcessingEnvironment 包装成 Proxy，
      * 需要解包才能访问 javac 的内部 API（如 Tree API）。
-     *
-     * 参考：
-     * - https://github.com/mapstruct/mapstruct/issues/2215
-     * - https://github.com/javalin/javalin-openapi/issues/141
-     *
-     * @param processingEnv 原始或被包装的 ProcessingEnvironment
-     * @return 解包后的 ProcessingEnvironment
      */
     private ProcessingEnvironment unwrapProcessingEnvironment(ProcessingEnvironment processingEnv) {
         try {
-            // 尝试使用 JetBrains 的 APIWrappers 解包
             Class<?> apiWrappers = processingEnv.getClass().getClassLoader()
                     .loadClass("org.jetbrains.jps.javac.APIWrappers");
             java.lang.reflect.Method unwrapMethod = apiWrappers.getDeclaredMethod("unwrap", Class.class, Object.class);
             ProcessingEnvironment unwrapped = (ProcessingEnvironment) unwrapMethod.invoke(
                     null, ProcessingEnvironment.class, processingEnv);
-
             if (unwrapped != null) {
-                // 成功解包，返回真实的 ProcessingEnvironment
                 return unwrapped;
             }
         } catch (Throwable ignored) {
-            // 不在 IDEA 环境中，或者解包失败，使用原始对象
         }
-
-        // 返回原始对象（标准 javac 环境）
         return processingEnv;
     }
 }

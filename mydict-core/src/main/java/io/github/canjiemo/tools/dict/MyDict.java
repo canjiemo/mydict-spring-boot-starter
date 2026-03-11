@@ -15,18 +15,11 @@ import java.lang.annotation.Target;
 @Retention(RetentionPolicy.SOURCE)
 public @interface MyDict {
     /**
-     * 字典名称简写。
+     * 字典类型码（即数据字典中的 type）。
      * <p>
-     * 仅在单独传递字典名时可简写为 {@code @MyDict("xxx")}。
+     * 例如：{@code @MyDict(type = "user_status")}
      */
-    String value() default "";
-
-    /**
-     * 字典名称。
-     * <p>
-     * 与 {@link #value()} 二选一即可，保留该属性用于兼容旧写法。
-     */
-    String name() default "";
+    String type();
 
     /**
      * 默认描述（当字典查询为空时返回）
@@ -39,12 +32,6 @@ public @interface MyDict {
     FieldAnnotation[] descFieldAnnotations() default {};
 
     /**
-     * @deprecated 请改用 {@link #descFieldAnnotations()}，保留该属性用于兼容旧写法。
-     */
-    @Deprecated(since = "1.0.4-jdk21")
-    FieldAnnotation[] fieldAnnotations() default {};
-
-    /**
      * 是否使用驼峰命名
      * 默认：true
      *
@@ -52,10 +39,10 @@ public @interface MyDict {
      * <ul>
      *   <li>1. 如果字段名包含下划线 '_'，忽略此开关，始终生成蛇形命名（如：user_status → user_status_desc）</li>
      *   <li>2. 如果字段名包含大小写混合，忽略此开关，始终生成驼峰命名（如：userName → userNameDesc）</li>
-     *   <li>3. 如果字段名全小写无特征（如：type），则根据此开关决定：
+     *   <li>3. 如果字段名全小写无特征（如：status），则根据此开关决定：
      *     <ul>
-     *       <li>true：生成驼峰 typeDesc</li>
-     *       <li>false：生成蛇形 type_desc</li>
+     *       <li>true：生成驼峰 statusDesc</li>
+     *       <li>false：生成蛇形 status_desc</li>
      *     </ul>
      *   </li>
      * </ul>

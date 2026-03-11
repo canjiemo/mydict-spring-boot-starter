@@ -42,7 +42,7 @@ class MyDictProcessIntegrationTest {
                 import io.github.canjiemo.tools.dict.MyDict;
 
                 public class WithoutGetter {
-                    @MyDict(name = "status_dict")
+                    @MyDict(type = "status_dict")
                     private Integer status = 1;
                 }
                 """);
@@ -60,7 +60,7 @@ class MyDictProcessIntegrationTest {
                 import io.github.canjiemo.tools.dict.MyDict;
 
                 public class FinalField {
-                    @MyDict(name = "status_dict")
+                    @MyDict(type = "status_dict")
                     private final Integer status = 1;
 
                     public Integer getStatus() {
@@ -81,7 +81,7 @@ class MyDictProcessIntegrationTest {
                 import io.github.canjiemo.tools.dict.MyDict;
 
                 public class ManualDescMethods {
-                    @MyDict(name = "status_dict")
+                    @MyDict(type = "status_dict")
                     private Integer status = 1;
 
                     public Integer getStatus() {
@@ -104,50 +104,18 @@ class MyDictProcessIntegrationTest {
     }
 
     @Test
-    void compilesWhenUsingValueShortcut(@TempDir Path tempDir) throws Exception {
-        CompilationResult result = compile(tempDir, "ValueShortcut", """
+    void failsWhenDictTypeIsMissing(@TempDir Path tempDir) throws Exception {
+        CompilationResult result = compile(tempDir, "MissingDictType", """
                 import io.github.canjiemo.tools.dict.MyDict;
 
-                public class ValueShortcut {
-                    @MyDict("status_dict")
-                    private Integer status = 1;
-                }
-                """);
-
-        assertThat(result.exitCode()).isZero();
-        Class<?> compiledClass = result.loadClass("ValueShortcut");
-        assertThat(compiledClass.getDeclaredField("statusDesc")).isNotNull();
-        assertThat(compiledClass.getDeclaredMethod("getStatusDesc")).isNotNull();
-    }
-
-    @Test
-    void failsWhenDictNameIsMissing(@TempDir Path tempDir) throws Exception {
-        CompilationResult result = compile(tempDir, "MissingDictName", """
-                import io.github.canjiemo.tools.dict.MyDict;
-
-                public class MissingDictName {
-                    @MyDict
+                public class MissingDictType {
+                    @MyDict(type = "")
                     private Integer status = 1;
                 }
                 """);
 
         assertThat(result.exitCode()).isNotZero();
-        assertThat(result.output()).contains("@MyDict requires a dictionary name");
-    }
-
-    @Test
-    void failsWhenValueAndNameConflict(@TempDir Path tempDir) throws Exception {
-        CompilationResult result = compile(tempDir, "ConflictingDictName", """
-                import io.github.canjiemo.tools.dict.MyDict;
-
-                public class ConflictingDictName {
-                    @MyDict(value = "status_dict", name = "user_status")
-                    private Integer status = 1;
-                }
-                """);
-
-        assertThat(result.exitCode()).isNotZero();
-        assertThat(result.output()).contains("@MyDict value and name must match");
+        assertThat(result.output()).contains("@MyDict requires a dictionary type");
     }
 
     @Test
@@ -184,7 +152,7 @@ class MyDictProcessIntegrationTest {
                     }
 
                     @MyDict(
-                        value = "status_dict",
+                        type = "status_dict",
                         descFieldAnnotations = {
                             @FieldAnnotation(
                                 fullAnnotationName = "sample.GeneratedFieldAnnotations.SampleMeta",
@@ -225,97 +193,6 @@ class MyDictProcessIntegrationTest {
     }
 
     @Test
-    void compilesWhenUsingDeprecatedFieldAnnotationsAlias(@TempDir Path tempDir) throws Exception {
-        CompilationResult result = compile(tempDir, "sample.LegacyFieldAnnotations", """
-                package sample;
-
-                import io.github.canjiemo.tools.dict.FieldAnnotation;
-                import io.github.canjiemo.tools.dict.MyDict;
-                import io.github.canjiemo.tools.dict.entity.Var;
-                import io.github.canjiemo.tools.dict.entity.VarType;
-
-                import java.lang.annotation.ElementType;
-                import java.lang.annotation.Retention;
-                import java.lang.annotation.RetentionPolicy;
-                import java.lang.annotation.Target;
-
-                public class LegacyFieldAnnotations {
-                    @Retention(RetentionPolicy.RUNTIME)
-                    @Target(ElementType.FIELD)
-                    public @interface LegacyMeta {
-                        String value();
-                    }
-
-                    @MyDict(
-                        value = "status_dict",
-                        fieldAnnotations = {
-                            @FieldAnnotation(
-                                fullAnnotationName = "sample.LegacyFieldAnnotations.LegacyMeta",
-                                vars = {
-                                    @Var(varType = VarType.STRING, varName = "value", varValue = "legacy")
-                                }
-                            )
-                        }
-                    )
-                    private Integer status = 1;
-                }
-                """);
-
-        assertThat(result.exitCode()).isZero();
-        Class<?> compiledClass = result.loadClass("sample.LegacyFieldAnnotations");
-        Field generatedField = compiledClass.getDeclaredField("statusDesc");
-        Annotation annotation = generatedField.getDeclaredAnnotations()[0];
-        Class<?> annotationType = annotation.annotationType();
-        assertThat(annotation).isNotNull();
-        assertThat(readAnnotationValue(annotationType, annotation, "value")).isEqualTo("legacy");
-    }
-
-    @Test
-    void failsWhenUsingNewAndLegacyAnnotationPropertiesTogether(@TempDir Path tempDir) throws Exception {
-        CompilationResult result = compile(tempDir, "sample.ConflictingDescAnnotations", """
-                package sample;
-
-                import io.github.canjiemo.tools.dict.FieldAnnotation;
-                import io.github.canjiemo.tools.dict.MyDict;
-                import io.github.canjiemo.tools.dict.entity.Var;
-                import io.github.canjiemo.tools.dict.entity.VarType;
-
-                import java.lang.annotation.ElementType;
-                import java.lang.annotation.Retention;
-                import java.lang.annotation.RetentionPolicy;
-                import java.lang.annotation.Target;
-
-                public class ConflictingDescAnnotations {
-                    @Retention(RetentionPolicy.RUNTIME)
-                    @Target(ElementType.FIELD)
-                    public @interface SampleMeta {
-                        String value();
-                    }
-
-                    @MyDict(
-                        value = "status_dict",
-                        descFieldAnnotations = {
-                            @FieldAnnotation(
-                                fullAnnotationName = "sample.ConflictingDescAnnotations.SampleMeta",
-                                vars = { @Var(varType = VarType.STRING, varName = "value", varValue = "new") }
-                            )
-                        },
-                        fieldAnnotations = {
-                            @FieldAnnotation(
-                                fullAnnotationName = "sample.ConflictingDescAnnotations.SampleMeta",
-                                vars = { @Var(varType = VarType.STRING, varName = "value", varValue = "old") }
-                            )
-                        }
-                    )
-                    private Integer status = 1;
-                }
-                """);
-
-        assertThat(result.exitCode()).isNotZero();
-        assertThat(result.output()).contains("cannot use descFieldAnnotations and deprecated fieldAnnotations at the same time");
-    }
-
-    @Test
     void failsWhenDescAnnotationTypeDoesNotExist(@TempDir Path tempDir) throws Exception {
         CompilationResult result = compile(tempDir, "sample.MissingDescAnnotationType", """
                 package sample;
@@ -325,7 +202,7 @@ class MyDictProcessIntegrationTest {
 
                 public class MissingDescAnnotationType {
                     @MyDict(
-                        value = "status_dict",
+                        type = "status_dict",
                         descFieldAnnotations = {
                             @FieldAnnotation(fullAnnotationName = "sample.DoesNotExist", vars = {})
                         }
@@ -361,7 +238,7 @@ class MyDictProcessIntegrationTest {
                     }
 
                     @MyDict(
-                        value = "status_dict",
+                        type = "status_dict",
                         descFieldAnnotations = {
                             @FieldAnnotation(
                                 fullAnnotationName = "sample.InvalidDescAnnotationMember.SampleMeta",
@@ -400,7 +277,7 @@ class MyDictProcessIntegrationTest {
                     }
 
                     @MyDict(
-                        value = "status_dict",
+                        type = "status_dict",
                         descFieldAnnotations = {
                             @FieldAnnotation(
                                 fullAnnotationName = "sample.RequiredDescAnnotationMemberMissing.SampleMeta",
@@ -439,7 +316,7 @@ class MyDictProcessIntegrationTest {
                     }
 
                     @MyDict(
-                        value = "status_dict",
+                        type = "status_dict",
                         descFieldAnnotations = {
                             @FieldAnnotation(
                                 fullAnnotationName = "sample.DescAnnotationTypeMismatch.SampleMeta",
