@@ -44,6 +44,9 @@ public class MyDictHelper {
      * @return 字典描述
      */
     public static String getDesc(String type, Object value) {
+        if (value == null) {
+            return null;
+        }
         String strValue = String.valueOf(value);
         if (cache == null) {
             return myDict.getDesc(type, strValue);

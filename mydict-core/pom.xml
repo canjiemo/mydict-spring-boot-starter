@@ -7,7 +7,7 @@
     <parent>
         <groupId>io.github.canjiemo</groupId>
         <artifactId>mydict-parent</artifactId>
-        <version>1.0.5-jdk21</version>
+        <version>1.0.6-jdk21</version>
         <relativePath>../pom.xml</relativePath>
     </parent>
 
