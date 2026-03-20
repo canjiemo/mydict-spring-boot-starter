@@ -2,7 +2,9 @@
 
 MyDict 是一个面向 Spring Boot 的字典描述字段自动化方案，用于把业务中的字典值字段在编译期扩展为可直接返回前端的描述字段，例如 `status -> statusDesc`、`type -> typeDesc`。
 
-当前版本：`1.0.5-jdk21`，支持 JDK 21+ 和 Spring Boot 3.x。
+[![Maven Central](https://img.shields.io/maven-central/v/io.github.canjiemo/mydict-spring-boot-starter.svg?label=Maven%20Central)](https://central.sonatype.com/artifact/io.github.canjiemo/mydict-spring-boot-starter)
+
+支持 JDK 21+ 和 Spring Boot 3.x。
 
 ## 📌 项目介绍
 
@@ -41,7 +43,8 @@ mvn -pl mydict-spring-boot -am package
 
 | 版本 | JDK要求 | Spring Boot | 说明 |
 |------|---------|-------------|------|
-| 1.0.5-jdk21 | **JDK21-24+** | 3.0+ | `@MyDict(type=...)` 统一注解属性 |
+| 1.0.6-jdk21 | **JDK21-24+** | 3.0+ | `getDesc` value 为 null 时直接返回 null |
+| 1.0.5-jdk21 | JDK21-24+ | 3.0+ | `@MyDict(type=...)` 统一注解属性 |
 | 1.0.4-jdk21 | JDK21-24+ | 3.0+ | 历史版本 |
 
 > **⚠️ 升级注意**：从 1.0.4 升级到 1.0.5，需将注解属性 `value`/`name` 统一改为 `type`：
@@ -102,12 +105,14 @@ public class UserVO {
 
 ### 1. 添加依赖
 
+> 最新版本请参考顶部徽章或 [Maven Central](https://central.sonatype.com/artifact/io.github.canjiemo/mydict-spring-boot-starter)。
+
 ```xml
 <dependencies>
     <dependency>
         <groupId>io.github.canjiemo</groupId>
         <artifactId>mydict-spring-boot-starter</artifactId>
-        <version>1.0.5-jdk21</version>
+        <version>1.0.6-jdk21</version>
     </dependency>
 </dependencies>
 ```
@@ -352,7 +357,7 @@ private String goodsTypeDesc;
         <dependency>
             <groupId>io.github.canjiemo</groupId>
             <artifactId>mydict-spring-boot-starter</artifactId>
-            <version>1.0.5-jdk21</version>
+            <version><!-- 最新版本见顶部徽章 --></version>
         </dependency>
     </dependencies>
 
@@ -403,7 +408,10 @@ MyDict 提供了专属的 IntelliJ IDEA 插件 **[mydict-intellij-plugin](https:
 
 ## 📝 更新日志
 
-### 1.0.5-jdk21 当前版本
+### 1.0.6-jdk21 当前版本
+- ✅ `getDesc` value 为 null 时直接返回 null，修复空值处理逻辑
+
+### 1.0.5-jdk21
 - ✅ `@MyDict` 注解属性统一为 `type`，语义与数据字典领域一致（破坏性变更）
 - ✅ `IMyDict.getDesc` 参数由 `Object` 改为 `String`，接口契约与实现一致
 - ✅ `getCacheStats()` 返回 `Optional<CacheStats>`，避免 NPE
