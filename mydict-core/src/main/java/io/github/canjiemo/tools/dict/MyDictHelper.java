@@ -16,7 +16,7 @@ import java.util.concurrent.TimeUnit;
 public class MyDictHelper {
 
     private static volatile IMyDict myDict;
-    private static volatile Cache<String, String> cache;
+    private static volatile Cache<String, Optional<String>> cache;
 
     public MyDictHelper(IMyDict myDict, MyDictCacheProperties properties) {
         MyDictHelper.myDict = myDict;
@@ -31,7 +31,7 @@ public class MyDictHelper {
                 cacheBuilder.recordStats();
             }
 
-            cache = cacheBuilder.build();
+            cache = cacheBuilder.<String, Optional<String>>build();
         }
     }
 
@@ -51,8 +51,9 @@ public class MyDictHelper {
         if (cache == null) {
             return myDict.getDesc(type, strValue);
         }
-        String cacheKey = type + ":" + strValue;
-        return cache.get(cacheKey, key -> myDict.getDesc(type, strValue));
+        String cacheKey = type.length() + ":" + type + strValue;
+        Optional<String> cached = cache.get(cacheKey, key -> Optional.ofNullable(myDict.getDesc(type, strValue)));
+        return cached != null ? cached.orElse(null) : null;
     }
 
     /**
@@ -71,7 +72,8 @@ public class MyDictHelper {
      */
     public static void clearCache(String type) {
         if (cache != null) {
-            cache.asMap().keySet().removeIf(key -> key.startsWith(type + ":"));
+                String prefix = type.length() + ":" + type;
+            cache.asMap().keySet().removeIf(key -> key.startsWith(prefix));
         }
     }
 

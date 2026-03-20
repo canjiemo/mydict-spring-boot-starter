@@ -43,7 +43,8 @@ mvn -pl mydict-spring-boot -am package
 
 | 版本 | JDK要求 | Spring Boot | 说明 |
 |------|---------|-------------|------|
-| 1.0.6-jdk21 | **JDK21-24+** | 3.0+ | `getDesc` value 为 null 时直接返回 null |
+| 1.0.7-jdk21 | **JDK21-24+** | 3.0+ | 缓存穿透修复、cache key 无碰撞设计 |
+| 1.0.6-jdk21 | JDK21-24+ | 3.0+ | `getDesc` value 为 null 时直接返回 null |
 | 1.0.5-jdk21 | JDK21-24+ | 3.0+ | `@MyDict(type=...)` 统一注解属性 |
 | 1.0.4-jdk21 | JDK21-24+ | 3.0+ | 历史版本 |
 
@@ -112,7 +113,7 @@ public class UserVO {
     <dependency>
         <groupId>io.github.canjiemo</groupId>
         <artifactId>mydict-spring-boot-starter</artifactId>
-        <version>1.0.6-jdk21</version>
+        <version>1.0.7-jdk21</version>
     </dependency>
 </dependencies>
 ```
@@ -408,7 +409,12 @@ MyDict 提供了专属的 IntelliJ IDEA 插件 **[mydict-intellij-plugin](https:
 
 ## 📝 更新日志
 
-### 1.0.6-jdk21 当前版本
+### 1.0.7-jdk21 当前版本
+- ✅ 修复缓存穿透：字典查询返回 null 时正确缓存（使用 `Optional` 包装），避免每次回源
+- ✅ 修复缓存 key 碰撞：采用长度前缀编码，type 含特殊字符时不再产生错误命中
+- ✅ 修复哨兵值泄露：移除 `\u0000` 哨兵字符串方案，彻底解决真实字典值被误判为 null 的问题
+
+### 1.0.6-jdk21
 - ✅ `getDesc` value 为 null 时直接返回 null，修复空值处理逻辑
 
 ### 1.0.5-jdk21
