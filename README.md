@@ -407,6 +407,25 @@ MyDict 提供了专属的 IntelliJ IDEA 插件 **[mydict-intellij-plugin](https:
 
 ---
 
+## 🤖 Claude Code Skill
+
+如果你使用 [Claude Code](https://claude.ai/code)，可以一键安装专属 skill，让 AI 在你遇到数字/枚举类型字段时自动提示使用 `@MyDict`，并精准引导正确的注解用法、命名规则和集成模式。
+
+**一键安装：**
+
+```bash
+mkdir -p ~/.claude/skills/mydict-dev && curl -fsSL \
+  https://raw.githubusercontent.com/canjiemo/mydict-spring-boot-starter/master/.claude/skills/mydict-dev/SKILL.md \
+  -o ~/.claude/skills/mydict-dev/SKILL.md
+```
+
+安装后，Claude Code 会在以下场景自动触发该 skill：
+- 实体类/VO 中出现 `Integer`、`Long` 等数字字段代表字典含义（状态、类型、性别等）
+- 代码中出现 `@MyDict`、`IMyDict`、`MyDictHelper` 等标识
+- 需要配置 `mydict.cache.*` 属性时
+
+---
+
 ## 📝 更新日志
 
 ### 1.0.7-jdk21 当前版本
